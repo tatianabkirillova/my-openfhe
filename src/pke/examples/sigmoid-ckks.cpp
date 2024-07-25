@@ -149,6 +149,15 @@ auto eval(CryptoContext<DCRTPoly> cryptoContext, KeyPair<DCRTPoly> keyPair)
     return result;
 }
 
+double mse(std::vector<double> reference, std::vector<double>calculated) {
+    double error = 0;
+    for(size_t i = 0; i < reference.size(); i++) {
+        double diff = reference[i]  - calculated[i];
+        error += std::pow(diff, 2);
+    }
+    return error / reference.size();
+} 
+
 int main() {
     CryptoContext<DCRTPoly> cryptoContext = getCryptoContext();
     auto keyPair = getKeyPair(cryptoContext);
@@ -157,9 +166,12 @@ int main() {
     std::vector<double> resultPlain = evalPlain();
     std::vector<double> resultSigmoid = sigmoidVec();
 
+    double error = mse(resultSigmoid, resultPlain);
+
     std::cout << "\nExpected sigmoid:         " << resultSigmoid << std::endl;
     std::cout << "\nExpected approx degree 7: " << resultPlain << std::endl;
     std::cout << "\nResult:                   " << result << std::endl;
+    std::cout << "\nApproximation error:     " << error << std::endl;
 
     return 0;
 }
