@@ -1,5 +1,8 @@
 #include <math.h>
 #include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <iostream>
 #include <memory>
 #include <vector>
 #include <cmath>
@@ -21,7 +24,6 @@ std::vector<double> inputVector = {0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0};
 uint32_t scaleModSize = 50;
 uint32_t batchSize = 8;
 uint32_t multDepth = 4;
-uint32_t polDegree = 7;
 
 double sigmoid(double x) {
     return 1.0 / (1.0 + exp(-x));
@@ -77,23 +79,35 @@ std::vector<double> evalPlain() {
     return sum7;
 }
 
-// auto evalGen(CryptoContext<DCRTPoly> cryptoContext, KeyPair<DCRTPoly> keyPair) {
-//     // Plaintext vector is encoded
-//     Plaintext ptEncoded = cryptoContext->MakeCKKSPackedPlaintext(inputVector);
-//     std::cout << "Plaintext: " << ptEncoded << std::endl;
+auto evalGen(CryptoContext<DCRTPoly> cryptoContext, KeyPair<DCRTPoly> keyPair, uint32_t degree) {
+    auto maxDegree = std::pow(2, multDepth);
+    if (degree > maxDegree)
+        std::cout << "Degree exceeds the set multiplicative depth." << std::endl;
+    // Plaintext vector is encoded
+    Plaintext ptEncoded = cryptoContext->MakeCKKSPackedPlaintext(inputVector);
+    std::cout << "Plaintext: " << ptEncoded << std::endl;
 
-//     // The encoded vectors are encrypted
-//     auto ct = cryptoContext->Encrypt(keyPair.publicKey, ptEncoded);
+    // The encoded vectors are encrypted
+    auto ct = cryptoContext->Encrypt(keyPair.publicKey, ptEncoded);
 
-//     std::vector<Ciphertext<lbcrypto::DCRTPolyImpl<bigintdyn::mubintvec<bigintdyn::ubint<
-//     unsigned long>>>>> c_x;
+    std::vector<Ciphertext<lbcrypto::DCRTPolyImpl<bigintdyn::mubintvec<bigintdyn::ubint<
+    unsigned long>>>>> c_x {ct, ct};
 
-//     c_x.push_back(ct);
-//     c_x.push_back(ct); // x^1
-//     for(int i = 0; i < polDegree; i++) {
-
-//     }
-// }
+    size_t a = 1;
+    size_t b = 1;
+    for(size_t i = 0; i < degree + 1; i++) {
+        if(!i || i == 1) 
+            continue;
+        
+        c_x.push_back(cryptoContext->EvalMult(c_x[i-a], c_x[i-b]));
+        std::cout << "x^" << i-a << " * " << "x^" << i-b << " = " << i-a+i-b << std::endl;
+        
+        if(i % 2) // uneven degree 
+            b++;
+        else a++; // even degree
+    }
+    return c_x;
+}
 
 auto eval(CryptoContext<DCRTPoly> cryptoContext, KeyPair<DCRTPoly> keyPair)
 {   
@@ -102,13 +116,20 @@ auto eval(CryptoContext<DCRTPoly> cryptoContext, KeyPair<DCRTPoly> keyPair)
     std::cout << "Plaintext: " << ptEncoded << std::endl;
 
     // The encoded vectors are encrypted
-    auto ct = cryptoContext->Encrypt(keyPair.publicKey, ptEncoded);
+    // auto ct = cryptoContext->Encrypt(keyPair.publicKey, ptEncoded);
 
-    auto c_x1 = ct;
-    auto c_x2 = cryptoContext->EvalMult(c_x1,c_x1);
-    auto c_x3 = cryptoContext->EvalMult(c_x1,c_x2);
-    auto c_x4 = cryptoContext->EvalMult(c_x2,c_x2);
-    auto c_x5 = cryptoContext->EvalMult(c_x2,c_x3);
+    // auto c_x1 = ct;
+    // auto c_x2 = cryptoContext->EvalMult(c_x1,c_x1);
+    // auto c_x3 = cryptoContext->EvalMult(c_x1,c_x2);
+    // auto c_x4 = cryptoContext->EvalMult(c_x2,c_x2);
+    // auto c_x5 = cryptoContext->EvalMult(c_x2,c_x3);
+    auto c_x = evalGen(cryptoContext, keyPair, 7);
+    
+    auto c_x1 = c_x[1];
+    auto c_x2 = c_x[2];
+    auto c_x3 = c_x[3];
+    auto c_x4 = c_x[4];
+    auto c_x5 = c_x[5];
     
     auto g_t=cryptoContext->EvalMult(cryptoContext->EvalMult(c_x1,(double)(1.0e-03)),c_x1);//2
     auto g_t1=cryptoContext->EvalMult(cryptoContext->EvalMult(c_x1,(double)(coeff[9]*pow(10,6))),c_x1);//2
@@ -149,29 +170,31 @@ auto eval(CryptoContext<DCRTPoly> cryptoContext, KeyPair<DCRTPoly> keyPair)
     return result;
 }
 
-double mse(std::vector<double> reference, std::vector<double>calculated) {
+double mse(std::vector<double> original, std::vector<double> approx) {
     double error = 0;
-    for(size_t i = 0; i < reference.size(); i++) {
-        double diff = reference[i]  - calculated[i];
+    for(size_t i = 0; i < original.size(); i++) {
+        double diff = original[i]  - approx[i];
         error += std::pow(diff, 2);
     }
-    return error / reference.size();
+    return error / original.size();
 } 
 
 int main() {
     CryptoContext<DCRTPoly> cryptoContext = getCryptoContext();
     auto keyPair = getKeyPair(cryptoContext);
 
-    Plaintext result = eval(cryptoContext, keyPair);
+    auto result = eval(cryptoContext, keyPair);
     std::vector<double> resultPlain = evalPlain();
     std::vector<double> resultSigmoid = sigmoidVec();
 
-    double error = mse(resultSigmoid, resultPlain);
+    //double error = mse(resultSigmoid, result);
 
     std::cout << "\nExpected sigmoid:         " << resultSigmoid << std::endl;
     std::cout << "\nExpected approx degree 7: " << resultPlain << std::endl;
     std::cout << "\nResult:                   " << result << std::endl;
-    std::cout << "\nApproximation error:     " << error << std::endl;
+    // std::cout << "\nApproximation error:     " << error << std::endl;
+
+    //evalGen(cryptoContext, keyPair);
 
     return 0;
 }
