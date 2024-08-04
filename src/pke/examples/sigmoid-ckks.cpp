@@ -170,19 +170,15 @@ auto eval(CryptoContext<DCRTPoly> cryptoContext, KeyPair<DCRTPoly> keyPair)
     return result;
 }
 
-auto msePlain(const std::vector<double> original, const std::vector<double> approx) {
-    double error = 0;
-    for (size_t i = 0; i < original.size(); i++) {
-        auto diff = original[i] - approx[i];
-        error += diff * diff;
-    }
-    return error / (double) original.size(); 
-}
-
-auto mse(std::vector<double> original, std::vector<std::complex<double>> approx) {
+template <typename T>
+auto mse(std::vector<double> original, std::vector<T> approx) {
     double error = 0;
     for(size_t i = 0; i < original.size(); i++){
-        auto diff = original[i] - approx[i].real();
+        auto diff = 0;
+        if constexpr (std::is_same<T, std::complex<double>>::value)
+            diff = original[i] - approx[i].real();
+        else
+            diff = original[i] - approx[i];
         error += diff * diff;
         //error += approx[i].real() - mult[(int)(i/d)][i%d];
     }
@@ -190,21 +186,32 @@ auto mse(std::vector<double> original, std::vector<std::complex<double>> approx)
     return error / (double) original.size();
 } 
 
-auto mae(std::vector<double> original, std::vector<std::complex<double>> approx) {
+template <typename T>
+auto mae(std::vector<double> original, std::vector<T> approx) {
     double error = 0;
     for(size_t i = 0; i < original.size(); i++){
-        auto diff = original[i] - approx[i].real();
+        auto diff = 0;
+        if constexpr (std::is_same<T, std::complex<double>>::value)
+            diff = original[i] - approx[i].real();
+        else
+            diff = original[i] - approx[i];
         error += (diff < 0 ? -diff : diff);
     }
     
     return error / (double) original.size();
 } 
 
-auto mape(std::vector<double> original, std::vector<std::complex<double>> approx) {
+template <typename T>
+auto mape(std::vector<double> original, std::vector<T> approx) {
     double error = 0;
     for(size_t i = 0; i < original.size(); i++){
         if(original[i] != 0) {
-            double diff = fabs(original[i] - approx[i].real()) / original[i];
+            double diff = 0;
+            if constexpr (std::is_same<T, std::complex<double>>::value)
+                diff = fabs(original[i] - approx[i].real()) / original[i];
+            else 
+                diff = fabs(original[i] - approx[i]) / original[i];
+            
             error += diff;
         }
     }
@@ -221,14 +228,16 @@ int main() {
     std::vector<double> sigmoid = sigmoidVec();
 
     std::vector<std::complex<double>> finalResult = result->GetCKKSPackedValue();
-    double mae_error = mae(sigmoid, finalResult);
-    double mape_error = mape(sigmoid, finalResult);
+    //double mae_error = mae(sigmoid, finalResult);
+    double mapeSigmoid = mape(sigmoid, finalResult);
+    double mapePlain = mape(sigmoid, resultPlain);
 
     std::cout << "\nExpected sigmoid:         " << sigmoid << std::endl;
     std::cout << "\nExpected approx degree 7: " << resultPlain << std::endl;
     std::cout << "\nResult:                   " << result << std::endl;
     //std::cout << "\nApproximation error mae:  " << mae_error << std::endl;
-    std::cout << "\nAccuracy with mape:       " << 100 - mape_error << "%" << std::endl;
+    std::cout << "\nAccuracy with mape (compared to sigmoid):                " << 100 - mapeSigmoid << "%" << std::endl;
+    std::cout << "\nAccuracy with mape (compared to plain evaluation):       " << 100 - mapePlain << "%" << std::endl;
 
     //evalGen(cryptoContext, keyPair);
 
