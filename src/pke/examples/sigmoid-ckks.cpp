@@ -123,7 +123,7 @@ auto eval(CryptoContext<DCRTPoly> cryptoContext, KeyPair<DCRTPoly> keyPair)
     // auto c_x3 = cryptoContext->EvalMult(c_x1,c_x2);
     // auto c_x4 = cryptoContext->EvalMult(c_x2,c_x2);
     // auto c_x5 = cryptoContext->EvalMult(c_x2,c_x3);
-    auto c_x = evalGen(cryptoContext, keyPair, 7);
+    auto c_x = evalGen(cryptoContext, keyPair, 30);
     
     auto c_x1 = c_x[1];
     auto c_x2 = c_x[2];
@@ -170,13 +170,46 @@ auto eval(CryptoContext<DCRTPoly> cryptoContext, KeyPair<DCRTPoly> keyPair)
     return result;
 }
 
-double mse(std::vector<double> original, std::vector<double> approx) {
+auto msePlain(const std::vector<double> original, const std::vector<double> approx) {
     double error = 0;
-    for(size_t i = 0; i < original.size(); i++) {
-        double diff = original[i]  - approx[i];
-        error += std::pow(diff, 2);
+    for (size_t i = 0; i < original.size(); i++) {
+        auto diff = original[i] - approx[i];
+        error += diff * diff;
     }
-    return error / original.size();
+    return error / (double) original.size(); 
+}
+
+auto mse(std::vector<double> original, std::vector<std::complex<double>> approx) {
+    double error = 0;
+    for(size_t i = 0; i < original.size(); i++){
+        auto diff = original[i] - approx[i].real();
+        error += diff * diff;
+        //error += approx[i].real() - mult[(int)(i/d)][i%d];
+    }
+    
+    return error / (double) original.size();
+} 
+
+auto mae(std::vector<double> original, std::vector<std::complex<double>> approx) {
+    double error = 0;
+    for(size_t i = 0; i < original.size(); i++){
+        auto diff = original[i] - approx[i].real();
+        error += (diff < 0 ? -diff : diff);
+    }
+    
+    return error / (double) original.size();
+} 
+
+auto mape(std::vector<double> original, std::vector<std::complex<double>> approx) {
+    double error = 0;
+    for(size_t i = 0; i < original.size(); i++){
+        if(original[i] != 0) {
+            double diff = fabs(original[i] - approx[i].real()) / original[i];
+            error += diff;
+        }
+    }
+    
+    return error * 100 / original.size();
 } 
 
 int main() {
@@ -185,14 +218,17 @@ int main() {
 
     auto result = eval(cryptoContext, keyPair);
     std::vector<double> resultPlain = evalPlain();
-    std::vector<double> resultSigmoid = sigmoidVec();
+    std::vector<double> sigmoid = sigmoidVec();
 
-    //double error = mse(resultSigmoid, result);
+    std::vector<std::complex<double>> finalResult = result->GetCKKSPackedValue();
+    double mae_error = mae(sigmoid, finalResult);
+    double mape_error = mape(sigmoid, finalResult);
 
-    std::cout << "\nExpected sigmoid:         " << resultSigmoid << std::endl;
+    std::cout << "\nExpected sigmoid:         " << sigmoid << std::endl;
     std::cout << "\nExpected approx degree 7: " << resultPlain << std::endl;
     std::cout << "\nResult:                   " << result << std::endl;
-    // std::cout << "\nApproximation error:     " << error << std::endl;
+    //std::cout << "\nApproximation error mae:  " << mae_error << std::endl;
+    std::cout << "\nAccuracy with mape:       " << 100 - mape_error << "%" << std::endl;
 
     //evalGen(cryptoContext, keyPair);
 
