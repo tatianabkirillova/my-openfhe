@@ -66,33 +66,26 @@ auto getKeyPair(CryptoContext<DCRTPoly> cryptoContext) {
     return keyPair;
 }
 
-std::vector<double> evalPlain() {
-    // 7
-    std::vector<double> sum7;
-    for(auto e : inputVector) {
-        sum7.push_back(coeff.at(7) * pow(4, e) * pow(3, e) +
-                       coeff.at(5) * pow(3, e) * pow(2, e) +
-                       coeff.at(3) * pow(2, e) * pow(1, e) +
-                       coeff.at(1) * pow(1, e) + pow(0, e) +
-                       coeff.at(0)
-        );
-    }
-    return sum7;
-}
 
-std::vector<double> evalPlainGen(uint32_t degree) {
+std::vector<double> evalPlain(uint32_t degree) {
+    std::cout << "##### eval plain #####" << std::endl;
     std::vector<double> xs; 
     for(auto e : inputVector) {
         double x = coeff.at(0);
-        int i = 1;
-        int p = 1;
-        while (degree) {
-            x += coeff.at(i) * pow(p, e) * pow(p-1, e);
-            p += 1;
-            i += 2;
+        std::cout << "input: " << e << std::endl;
+        std::cout << "x = c[0] = " << coeff.at(0) << std::endl;
+        auto i = degree;
+        while (i > 0) {
+            if(i % 2) {
+                x += coeff.at(i) * pow(e, i);
+                std::cout << "degree: " << i << std::endl;
+                std::cout << "x = c[" << i << "] = " << coeff.at(i) << " * " << e << "^" << i << std::endl;
+            }
+            i--;
         }
         xs.push_back(x);
     }
+    std::cout << "##### eval plain #####" << std::endl;
     return xs;
 }
 
@@ -236,27 +229,31 @@ auto mape(std::vector<double> original, std::vector<T> approx) {
     return error * 100 / original.size();
 } 
 
+void printResults(std::vector<double> funcResult, std::vector<double> plainResult, std::vector<std::complex<double>> result) {
+    std::cout << "\nExpected sigmoid:         " << funcResult << std::endl;
+    std::cout << "\nExpected approx:          " << plainResult << std::endl;
+    std::cout << "\nResult:                   " << result << std::endl;
+
+    //double mae_error = mae(sigmoid, finalResult);
+    double mapeSigmoid = mape(funcResult, result);
+    double mapePlain = mape(funcResult, plainResult);
+
+    //std::cout << "\nApproximation error mae:  " << mae_error << std::endl;
+    std::cout << "\nAccuracy with mape (compared to sigmoid):                " << 100 - mapeSigmoid << "%" << std::endl;
+    std::cout << "\nAccuracy with mape (compared to plain evaluation):       " << 100 - mapePlain << "%" << std::endl;
+}
+
 int main() {
     CryptoContext<DCRTPoly> cryptoContext = getCryptoContext();
     auto keyPair = getKeyPair(cryptoContext);
 
     auto result = eval(cryptoContext, keyPair);
-    std::vector<double> resultPlain = evalPlainGen(13);
+    std::vector<double> resultPlain = evalPlain(13);
     std::vector<double> sigmoid = sigmoidVec();
 
     std::vector<std::complex<double>> finalResult = result->GetCKKSPackedValue();
-    //double mae_error = mae(sigmoid, finalResult);
-    double mapeSigmoid = mape(sigmoid, finalResult);
-    double mapePlain = mape(sigmoid, resultPlain);
 
-    std::cout << "\nExpected sigmoid:         " << sigmoid << std::endl;
-    std::cout << "\nExpected approx degree 7: " << resultPlain << std::endl;
-    std::cout << "\nResult:                   " << result << std::endl;
-    //std::cout << "\nApproximation error mae:  " << mae_error << std::endl;
-    std::cout << "\nAccuracy with mape (compared to sigmoid):                " << 100 - mapeSigmoid << "%" << std::endl;
-    std::cout << "\nAccuracy with mape (compared to plain evaluation):       " << 100 - mapePlain << "%" << std::endl;
-
-    //evalGen(cryptoContext, keyPair);
+    printResults(sigmoid, resultPlain, finalResult);
 
     return 0;
 }
