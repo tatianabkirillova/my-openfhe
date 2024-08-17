@@ -5,7 +5,7 @@ sidebar_position: 3
 
 The goal of this research is to test and evaluate the performance of different activation functions on homomorphically encrypted input and enhance the OpenFHE library.  
 
-# Introduction:
+# Introduction: - 2p
 
 + general background
 + clear motivation for my main reasearch problem or thesis goal
@@ -18,17 +18,22 @@ The goal of this research is to test and evaluate the performance of different a
   + contextualize my contribution with related work
   + mention related work in the Background or final Discussion section
 
-# Background
-## Homomorphic encryption
+# Background - 10p
+## Homomorphic encryption - 2p
 + ability to perform computations on encrypted data
-## OpenFHE
+## OpenFHE 9p
 + One of the 
-## CKKS Scheme
-## Machine learning 
-## Activation functions
+## Different schemes, especially CKKS Scheme 1p
+## Applications in Machine learning 2p
+## Activation functions 1p
+
+# Polynomial approximation 1p
+# Degrees 1p
+# Implementation 5p
 
 # Results 
 
+# Conclusion 1p
 
 # Citations:
 
@@ -36,35 +41,23 @@ The goal of this research is to test and evaluate the performance of different a
 
 # TO-DO:
 
-OK: plain evaluation till a given degree
+- [x] plain evaluation till a given degree
+- [x] degree 13 should give accuracy of 96.60 (96.5955) -> 98.6
+- [x] generate coefficients with polyfit
+- [x] plot to check coefficients
+- [ ] try generating coeffs from more points
+- [x] encrypted evaluation till a given degree w/o splitting the the coefficients
+- [x] test the accuracy
+- [ ] figure out when to split coefficients: thresholds
+- [ ] test different functions
+- [ ] transform to python?
+- [ ] figure out what parameters scaleModSize & batchSize do
 
-O: degree 13 should give accuracy of 96.60 (96.5955) 
+# Polyfit
 
-O: encrypted evaluation till a given degree w/o splitting the the coefficients
+I use numpy.polynomial to generate coefficients for the chebyshev approximation of the sigmoid function
 
-O: test the accuracy
-
-O: figure out when to split coefficients: thresholds
-
-O: generate coefficients with polyfit
-
-O: test different 
-
-# Accuricies
+# Accuracies
 
 Using MAPE to measure accuracy 
 
-## Degree = 13
-
-Expected sigmoid:         [ 0.562177 0.622459 0.679179 0.731059 0.880797 ]
-
-Expected approx:          [ 0.542979 0.585682 0.627836 0.669175 0.821422 ]
-
-Result:                   (0.542979, 0.585682, 0.627836, 0.669175, 0.821422,  ... ); Estimated precision: 43 bits
-
-
-Accuracy with mape (compared to sigmoid):                93.5822%
-
-Accuracy with mape (compared to plain evaluation):       93.5822%
-
-## Degree = 15
