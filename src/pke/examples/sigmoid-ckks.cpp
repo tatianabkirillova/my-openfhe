@@ -41,7 +41,7 @@ std::vector<double> inputVector = {0.25, 0.5, 0.75, 1.0, 2.0};
 
 uint32_t scaleModSize = 50;
 uint32_t batchSize = 8;
-uint32_t multDepth = 6;
+uint32_t multDepth = 4;
 
 template <typename T>
 auto mse(std::vector<double> original, std::vector<T> approx) {
@@ -77,7 +77,7 @@ auto mae(std::vector<double> original, std::vector<T> approx) {
 template <typename T>
 auto mape(std::vector<double> original, std::vector<T> approx) {
     double error = 0;
-    for(int i = 0; i < original.size(); i++){
+    for(size_t i = 0; i < original.size(); i++){
         if(original[i] != 0) {
             double diff = 0;
             if constexpr (std::is_same<T, std::complex<double>>::value)
@@ -197,7 +197,7 @@ auto eval(CryptoContext<DCRTPoly> cryptoContext, KeyPair<DCRTPoly> keyPair, int 
 
     // Add
     auto evalResult = cryptoContext->EvalAdd(cryptoContext->EvalMult(c_x[1], coeff[1]), coeff[0]);
-    for (int i = 2; i < c_x.size(); i++) {
+    for (size_t i = 2; i < c_x.size(); i++) {
         evalResult = cryptoContext->EvalAdd(cryptoContext->EvalMult(c_x[i], coeff[i]), evalResult);
     }
 
@@ -209,7 +209,7 @@ auto eval(CryptoContext<DCRTPoly> cryptoContext, KeyPair<DCRTPoly> keyPair, int 
     return result;
 }
 
-auto eval13(CryptoContext<DCRTPoly> cryptoContext, KeyPair<DCRTPoly> keyPair)
+auto eval7(CryptoContext<DCRTPoly> cryptoContext, KeyPair<DCRTPoly> keyPair)
 {   
     // The encoded vectors are encrypted
     // auto ct = cryptoContext->Encrypt(keyPair.publicKey, ptEncoded);
@@ -241,7 +241,7 @@ auto eval13(CryptoContext<DCRTPoly> cryptoContext, KeyPair<DCRTPoly> keyPair)
     
     
     auto f_t=cryptoContext->EvalMult(cryptoContext->EvalMult(c_x1,(double)(1.0e-06)),c_x2);//2
-    auto f_t1=cryptoContext->EvalMult(cryptoContext->EvalMult(c_x1,(double)(coeff[13]*pow(10,12))),c_x2);//2
+    auto f_t1=cryptoContext->EvalMult(cryptoContext->EvalMult(c_x1,(double)(coeff[13]*pow(10,12))),c_x2);//2 why is here coeff 13
 
     auto f_t2=cryptoContext-> EvalSquare(f_t);//3 x^6
     auto f_t3=cryptoContext->EvalMult(f_t1,c_x4);//3 x^7
@@ -286,15 +286,28 @@ int main() {
     CryptoContext<DCRTPoly> cryptoContext = getCryptoContext();
     auto keyPair = getKeyPair(cryptoContext);
 
-    auto result = eval13(cryptoContext, keyPair);
-    std::vector<double> resultPlain = evalPlain(13);
+    std::cout << "-----------------------------------------------------------------------" << std::endl;
+    std::cout << "Manual evaluation degree 7:" << std::endl;
+    std::cout << "-----------------------------------------------------------------------" << std::endl;
+    auto result = eval7(cryptoContext, keyPair);
+    std::vector<double> resultPlain = evalPlain(5);
     std::vector<double> sigmoid = sigmoidVec();
 
     std::vector<std::complex<double>> finalResult = result->GetCKKSPackedValue();
 
     printResults(sigmoid, resultPlain, finalResult);
 
-    std::vector<int> degrees {7, 13, 16, 31, 32};
+    std::cout << "\n-----------------------------------------------------------------------" << std::endl;
+    std::cout << "Generated..." << std::endl;
+    std::cout << "-----------------------------------------------------------------------" << std::endl;
+    std::vector<int> degrees {7, 13, 16, 31, 32, 33};
+
+    for (int degree: degrees) {
+        std::cout << "Checking degree " << degree << std::endl;
+        evalGen(cryptoContext, keyPair, degree);
+        std::cout << "Done." << std::endl;
+    }
+
     for (int degree: degrees) {
         std::cout << "\n############################## DEGREE " << degree << " ##############################" << std::endl;
         result = eval(cryptoContext, keyPair, degree);

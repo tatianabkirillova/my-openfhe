@@ -55,9 +55,5 @@ terminate called after throwing an instance of 'lbcrypto::OpenFHEException'
 Aborted (core dumped)
 
 ```
-
-
-
-
-
+The error means the set multiplicative depth is too small
 
