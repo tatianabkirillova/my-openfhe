@@ -111,24 +111,24 @@ CryptoContext<DCRTPoly> getCryptoContext() {
     parameters.SetScalingModSize(scaleModSize);
     parameters.SetBatchSize(batchSize);
 
-    CryptoContext<DCRTPoly> cryptoContext = GenCryptoContext(parameters);
+    CryptoContext<DCRTPoly> cc = GenCryptoContext(parameters);
     // Enable features that you wish to use
-    cryptoContext->Enable(PKE);
-    cryptoContext->Enable(KEYSWITCH);
-    cryptoContext->Enable(LEVELEDSHE);
-    cryptoContext->Enable(ADVANCEDSHE);
+    cc->Enable(PKE);
+    cc->Enable(KEYSWITCH);
+    cc->Enable(LEVELEDSHE);
+    cc->Enable(ADVANCEDSHE);
 
-    std::cout << "CKKS scheme is using ring dimension " << cryptoContext->GetRingDimension() << std::endl << std::endl;
+    std::cout << "CKKS scheme is using ring dimension " << cc->GetRingDimension() << std::endl << std::endl;
 
-    return cryptoContext;
+    return cc;
 }
 
-auto getKeyPair(CryptoContext<DCRTPoly> cryptoContext) {
+auto getKeyPair(CryptoContext<DCRTPoly> cc) {
     // Generate a public/private key pair
-    auto keyPair = cryptoContext->KeyGen();
+    auto keyPair = cc->KeyGen();
 
     // Generate the relinearization key
-    cryptoContext->EvalMultKeyGen(keyPair.secretKey);
+    cc->EvalMultKeyGen(keyPair.secretKey);
  
     return keyPair;
 }
@@ -155,113 +155,69 @@ std::vector<double> evalPlain(uint32_t degree) {
     return xs;
 }
 
-auto evalGen(CryptoContext<DCRTPoly> cryptoContext, KeyPair<DCRTPoly> keyPair, int degree) {
-    auto maxDegree = std::pow(2, multDepth);
-    if (degree > maxDegree)
-        std::cout << "Degree exceeds the set multiplicative depth." << std::endl;
-    
-    // Plaintext vector is encoded
-    Plaintext ptEncoded = cryptoContext->MakeCKKSPackedPlaintext(inputVector);
-
-    // The encoded vectors are encrypted
-    auto ct = cryptoContext->Encrypt(keyPair.publicKey, ptEncoded);
-    //std::cout << "EVAL GENERATOR CT" << std::endl; 
-    //std::cout << ct << std::endl;
-
-    std::vector<Ciphertext<lbcrypto::DCRTPolyImpl<bigintdyn::mubintvec<bigintdyn::ubint<unsigned long>>>>> 
-    c_x {ct, ct};
-
-    int a = 1;
-    int b = 1;
-    for(int i = 2; i <= degree; i++) {
-        
-        c_x.push_back(cryptoContext->EvalMult(c_x[i-a], c_x[i-b]));
-
-        //std::cout << "x^" << i-a << " * " << "x^" << i-b << " = " << i-a+i-b << std::endl;
-        
-        if(i % 2) // uneven degree 
-            b++;
-        else a++; // even degree
+auto evalGen(CryptoContext<DCRTPoly> cc, Ciphertext<DCRTPoly> ct, int degree) {  
+    switch (degree)
+    {
+    // case 0:
+    //     return cc->EvalMult(coeff[0], 1);
+    case 1:
+        return cc->EvalMult(coeff[1], ct);
+        break;
+    default:
+        break;
     }
-    return c_x;
 }
 
-auto eval(CryptoContext<DCRTPoly> cryptoContext, KeyPair<DCRTPoly> keyPair, int degree) {
-    // Plaintext vector is encoded
-    Plaintext ptEncoded = cryptoContext->MakeCKKSPackedPlaintext(inputVector);
-    std::cout << "Plaintext: " << ptEncoded << std::endl;
+// auto eval(CryptoContext<DCRTPoly> cc, Ciphertext<DCRTPoly> ct, int degree) {
+//     auto c_x = evalGen(cc, ct, degree);
 
-    auto c_x = evalGen(cryptoContext, keyPair, degree);
+//     // Add
+//     auto evalResult = cc->EvalAdd(cc->EvalMult(c_x[1], coeff[1]), coeff[0]);
+//     for (int i = 2; i < c_x.size(); i++) {
+//         evalResult = cc->EvalAdd(cc->EvalMult(c_x[i], coeff[i]), evalResult);
+//     }
 
-    // Add
-    auto evalResult = cryptoContext->EvalAdd(cryptoContext->EvalMult(c_x[1], coeff[1]), coeff[0]);
-    for (int i = 2; i < c_x.size(); i++) {
-        evalResult = cryptoContext->EvalAdd(cryptoContext->EvalMult(c_x[i], coeff[i]), evalResult);
-    }
+//     return evalResult;
+// }
 
-    // Decrypt the result of additions
-    Plaintext result;
-    cryptoContext->Decrypt(keyPair.secretKey, evalResult, &result);
-    result->SetLength(inputVector.size());
-
-    return result;
-}
-
-auto eval13(CryptoContext<DCRTPoly> cryptoContext, KeyPair<DCRTPoly> keyPair)
+auto eval13(CryptoContext<DCRTPoly> cc, Ciphertext<DCRTPoly> ct)
 {   
-    // The encoded vectors are encrypted
-    // auto ct = cryptoContext->Encrypt(keyPair.publicKey, ptEncoded);
+    auto c_x1 = ct;
+    auto c_x2 = cc->EvalMult(c_x1,c_x1);
+    auto c_x3 = cc->EvalMult(c_x1,c_x2);
+    auto c_x4 = cc->EvalMult(c_x2,c_x2);
+    auto c_x5 = cc->EvalMult(c_x2,c_x3);
+    
+    auto g_t=cc->EvalMult(cc->EvalMult(c_x1,(double)(1.0e-03)),c_x1);//2
+    auto g_t1=cc->EvalMult(cc->EvalMult(c_x1,(double)(coeff[9]*pow(10,6))),c_x1);//2
 
-    // auto c_x1 = ct;
-    // auto c_x2 = cryptoContext->EvalMult(c_x1,c_x1);
-    // auto c_x3 = cryptoContext->EvalMult(c_x1,c_x2);
-    // auto c_x4 = cryptoContext->EvalMult(c_x2,c_x2);
-    // auto c_x5 = cryptoContext->EvalMult(c_x2,c_x3);
-    auto c_x = evalGen(cryptoContext, keyPair, 16);
+    auto g_t2=cc-> EvalSquare(g_t);//3 x^4
+    auto g_t3=cc->EvalMult(g_t1,c_x3);//3 x^5
     
-    auto c_x1 = c_x[1];
-    auto c_x2 = c_x[2];
-    auto c_x3 = c_x[3];
-    auto c_x4 = c_x[4];
-    auto c_x5 = c_x[5];
-    
-    auto g_t=cryptoContext->EvalMult(cryptoContext->EvalMult(c_x1,(double)(1.0e-03)),c_x1);//2
-    auto g_t1=cryptoContext->EvalMult(cryptoContext->EvalMult(c_x1,(double)(coeff[9]*pow(10,6))),c_x1);//2
+    auto e_t=cc->EvalMult(cc->EvalMult(c_x1,(double)(1.0e-05)),c_x2);//2
+    auto e_t1=cc->EvalMult(cc->EvalMult(c_x1,(double)(coeff[11]*pow(10,10))),c_x1);//2
 
-    auto g_t2=cryptoContext-> EvalSquare(g_t);//3 x^4
-    auto g_t3=cryptoContext->EvalMult(g_t1,c_x3);//3 x^5
+    auto e_t2=cc-> EvalSquare(e_t);//3 x^6
+    auto e_t3=cc->EvalMult(e_t1,c_x3);//3 x^5
     
-    auto e_t=cryptoContext->EvalMult(cryptoContext->EvalMult(c_x1,(double)(1.0e-05)),c_x2);//2
-    auto e_t1=cryptoContext->EvalMult(cryptoContext->EvalMult(c_x1,(double)(coeff[11]*pow(10,10))),c_x1);//2
+    
+    auto f_t=cc->EvalMult(cc->EvalMult(c_x1,(double)(1.0e-06)),c_x2);//2
+    auto f_t1=cc->EvalMult(cc->EvalMult(c_x1,(double)(coeff[13]*pow(10,12))),c_x2);//2 why is here coeff 13
 
-    auto e_t2=cryptoContext-> EvalSquare(e_t);//3 x^6
-    auto e_t3=cryptoContext->EvalMult(e_t1,c_x3);//3 x^5
+    auto f_t2=cc-> EvalSquare(f_t);//3 x^6
+    auto f_t3=cc->EvalMult(f_t1,c_x4);//3 x^7
     
     
-    auto f_t=cryptoContext->EvalMult(cryptoContext->EvalMult(c_x1,(double)(1.0e-06)),c_x2);//2
-    auto f_t1=cryptoContext->EvalMult(cryptoContext->EvalMult(c_x1,(double)(coeff[13]*pow(10,12))),c_x2);//2 why is here coeff 13
+    auto eval_1 = cc->EvalAdd(cc->EvalMult(c_x1,coeff[1]),coeff[0]);
+    auto eval_2 = cc->EvalAdd(cc->EvalMult(cc->EvalMult(c_x2,coeff[3]),c_x1),eval_1);
 
-    auto f_t2=cryptoContext-> EvalSquare(f_t);//3 x^6
-    auto f_t3=cryptoContext->EvalMult(f_t1,c_x4);//3 x^7
-    
-    
-    auto eval_1 = cryptoContext->EvalAdd(cryptoContext->EvalMult(c_x1,coeff[1]),coeff[0]);
-    auto eval_2 = cryptoContext->EvalAdd(cryptoContext->EvalMult(cryptoContext->EvalMult(c_x2,coeff[3]),c_x1),eval_1);
+    auto eval_3 = cc->EvalAdd(cc->EvalMult(cc->EvalMult(c_x3,coeff[5]),c_x2),eval_2);
+    auto eval_4 = cc->EvalAdd(cc->EvalMult(cc->EvalMult(c_x4,coeff[7]),c_x3),eval_3);
+    auto eval_5 = cc->EvalAdd(cc->EvalMult(g_t2,g_t3),eval_4);
+    auto eval_6 = cc->EvalAdd(cc->EvalMult(e_t2,e_t3),eval_5);
+    auto eval_7 = cc->EvalAdd(cc->EvalMult(f_t2,f_t3),eval_6);
 
-    auto eval_3 = cryptoContext->EvalAdd(cryptoContext->EvalMult(cryptoContext->EvalMult(c_x3,coeff[5]),c_x2),eval_2);
-    auto eval_4 = cryptoContext->EvalAdd(cryptoContext->EvalMult(cryptoContext->EvalMult(c_x4,coeff[7]),c_x3),eval_3);
-    auto eval_5 = cryptoContext->EvalAdd(cryptoContext->EvalMult(g_t2,g_t3),eval_4);
-    auto eval_6 = cryptoContext->EvalAdd(cryptoContext->EvalMult(e_t2,e_t3),eval_5);
-    auto eval_7 = cryptoContext->EvalAdd(cryptoContext->EvalMult(f_t2,f_t3),eval_6);
-    
-    //Step 5: Decryption
-
-    // Decrypt the result of additions
-    Plaintext result;
-    cryptoContext->Decrypt(keyPair.secretKey, eval_7, &result);
-    result->SetLength(inputVector.size());
-
-    return result;
+    return eval_7;
 }
 
 
@@ -281,13 +237,20 @@ void printResults(std::vector<double> funcResult, std::vector<double> plainResul
 
 int main() {
     // Get crypto context
-    CryptoContext<DCRTPoly> cryptoContext = getCryptoContext();
-    auto keyPair = getKeyPair(cryptoContext);
+    CryptoContext<DCRTPoly> cc = getCryptoContext();
+    KeyPair<DCRTPoly> keyPair = getKeyPair(cc);
+    Plaintext ptEncoded = cc->MakeCKKSPackedPlaintext(inputVector);
+    Ciphertext<DCRTPoly> ct = cc->Encrypt(keyPair.publicKey, ptEncoded);
+
 
     std::cout << "-----------------------------------------------------------------------" << std::endl;
     std::cout << "Manual evaluation degree 13:" << std::endl;
     std::cout << "-----------------------------------------------------------------------" << std::endl;
-    auto result = eval13(cryptoContext, keyPair);
+
+    Plaintext result;
+    cc->Decrypt(keyPair.secretKey, eval13(cc, ct), &result);
+    result->SetLength(inputVector.size());
+
     std::vector<double> resultPlain = evalPlain(5);
     std::vector<double> sigmoid = sigmoidVec();
 
@@ -295,27 +258,31 @@ int main() {
 
     printResults(sigmoid, resultPlain, finalResult);
 
-    std::cout << "\n-----------------------------------------------------------------------" << std::endl;
-    std::cout << "Generated..." << std::endl;
-    std::cout << "-----------------------------------------------------------------------" << std::endl;
-    std::vector<int> degrees {7, 13, 16, 31, 32, 33};
+    // std::cout << "\n-----------------------------------------------------------------------" << std::endl;
+    // std::cout << "Generated..." << std::endl;
+    // std::cout << "-----------------------------------------------------------------------" << std::endl;
+    // std::vector<int> degrees {7, 13, 16, 31, 32, 33};
 
-    for (int degree: degrees) {
-        std::cout << "Checking degree " << degree << std::endl;
-        evalGen(cryptoContext, keyPair, degree);
-        std::cout << "Done." << std::endl;
-    }
+    // for (int degree: degrees) {
+    //     std::cout << "Checking degree " << degree << std::endl;
+    //     //evalGen(cc, keyPair, degree);
+    //     std::cout << "Done." << std::endl;
+    // }
 
-    for (int degree: degrees) {
-        std::cout << "\n############################## DEGREE " << degree << " ##############################" << std::endl;
-        result = eval(cryptoContext, keyPair, degree);
-        resultPlain = evalPlain(degree);
-        sigmoid = sigmoidVec();
+    // for (int degree: degrees) {
+    //     std::cout << "\n############################## DEGREE " << degree << " ##############################" << std::endl;
+        
+    //     Plaintext result;
+    //     cc->Decrypt(keyPair.secretKey, eval(cc, ct, degree), &result);
+    //     result->SetLength(inputVector.size());
+        
+    //     resultPlain = evalPlain(degree);
+    //     sigmoid = sigmoidVec();
 
-        finalResult = result->GetCKKSPackedValue();
+    //     finalResult = result->GetCKKSPackedValue();
 
-        printResults(sigmoid, resultPlain, finalResult);
-    }
+    //     printResults(sigmoid, resultPlain, finalResult);
+    // }
     
     return 0;
 }
