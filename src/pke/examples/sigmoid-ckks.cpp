@@ -77,7 +77,7 @@ auto mae(std::vector<double> original, std::vector<T> approx) {
 template <typename T>
 auto mape(std::vector<double> original, std::vector<T> approx) {
     double error = 0;
-    for(size_t i = 0; i < original.size(); i++){
+    for(int i = 0; i < original.size(); i++){
         if(original[i] != 0) {
             double diff = 0;
             if constexpr (std::is_same<T, std::complex<double>>::value)
@@ -173,9 +173,7 @@ auto evalGen(CryptoContext<DCRTPoly> cryptoContext, KeyPair<DCRTPoly> keyPair, i
 
     int a = 1;
     int b = 1;
-    for(int i = 0; i < degree + 1; i++) {
-        if(!i || i == 1) 
-            continue;
+    for(int i = 2; i <= degree; i++) {
         
         c_x.push_back(cryptoContext->EvalMult(c_x[i-a], c_x[i-b]));
 
@@ -197,7 +195,7 @@ auto eval(CryptoContext<DCRTPoly> cryptoContext, KeyPair<DCRTPoly> keyPair, int 
 
     // Add
     auto evalResult = cryptoContext->EvalAdd(cryptoContext->EvalMult(c_x[1], coeff[1]), coeff[0]);
-    for (size_t i = 2; i < c_x.size(); i++) {
+    for (int i = 2; i < c_x.size(); i++) {
         evalResult = cryptoContext->EvalAdd(cryptoContext->EvalMult(c_x[i], coeff[i]), evalResult);
     }
 
@@ -209,7 +207,7 @@ auto eval(CryptoContext<DCRTPoly> cryptoContext, KeyPair<DCRTPoly> keyPair, int 
     return result;
 }
 
-auto eval7(CryptoContext<DCRTPoly> cryptoContext, KeyPair<DCRTPoly> keyPair)
+auto eval13(CryptoContext<DCRTPoly> cryptoContext, KeyPair<DCRTPoly> keyPair)
 {   
     // The encoded vectors are encrypted
     // auto ct = cryptoContext->Encrypt(keyPair.publicKey, ptEncoded);
@@ -287,9 +285,9 @@ int main() {
     auto keyPair = getKeyPair(cryptoContext);
 
     std::cout << "-----------------------------------------------------------------------" << std::endl;
-    std::cout << "Manual evaluation degree 7:" << std::endl;
+    std::cout << "Manual evaluation degree 13:" << std::endl;
     std::cout << "-----------------------------------------------------------------------" << std::endl;
-    auto result = eval7(cryptoContext, keyPair);
+    auto result = eval13(cryptoContext, keyPair);
     std::vector<double> resultPlain = evalPlain(5);
     std::vector<double> sigmoid = sigmoidVec();
 
