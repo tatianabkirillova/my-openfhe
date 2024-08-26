@@ -155,17 +155,20 @@ std::vector<double> evalPlain(uint32_t degree) {
     return xs;
 }
 
-auto evalGen(CryptoContext<DCRTPoly> cc, Ciphertext<DCRTPoly> ct, int degree) {  
-    switch (degree)
-    {
-    // case 0:
-    //     return cc->EvalMult(coeff[0], 1);
-    case 1:
-        return cc->EvalMult(coeff[1], ct);
-        break;
-    default:
-        break;
-    }
+auto evalTreeLeft(CryptoContext<DCRTPoly> cc, Ciphertext<DCRTPoly> ct, int degree) {  // with coeffs
+    // switch (degree)
+    // {
+    //     case 1:
+    //         cc->EvalMult(coeff[1], ct);
+    //         break;
+    //     case 2: 
+    //         cc->EvalMult(coef)
+    //     default:
+    //         break;
+    // }
+}
+
+auto evalTreeRight() { // no coeffs
 }
 
 // auto eval(CryptoContext<DCRTPoly> cc, Ciphertext<DCRTPoly> ct, int degree) {

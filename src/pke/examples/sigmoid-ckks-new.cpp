@@ -26,21 +26,19 @@ class SigmoidCKKS {
         uint32_t multDepth;
         uint32_t degree;
 
-        std::vector<double> inputVector;
-        std::vector<double> coeff;
+        vector<double> inputVector;
+        vector<double> coeff;
 
         CryptoContext<DCRTPoly> cc;
         KeyPair<DCRTPoly> keyPair;
         Ciphertext<DCRTPoly> ct;
 
-        std::vector<double> funcResult;
-        std::vector<double> plainResult;
-        std::vector<std::complex<double>> cryptoResult;
+        Plaintext result;
 
         SigmoidCKKS(uint32_t multDepth_, 
                     uint32_t degree_, 
-                    std::vector<double> inputVector_,
-                    std::vector<double> coeff_) {
+                    vector<double> inputVector_,
+                    vector<double> coeff_) {
             this->scaleModSize = 50;
             this->batchSize = 8;
             
@@ -52,7 +50,6 @@ class SigmoidCKKS {
 
             initCryptoContext();   
             initKeyPair();
-            encrypt();
         }
 
         void initCryptoContext() {
@@ -68,7 +65,7 @@ class SigmoidCKKS {
             cc->Enable(LEVELEDSHE);
             cc->Enable(ADVANCEDSHE);
 
-            std::cout << "CKKS scheme is using ring dimension " << cc->GetRingDimension() << std::endl << std::endl;
+            cout << "CKKS scheme is using ring dimension " << cc->GetRingDimension() << endl << endl;
         }
 
         void initKeyPair() {
@@ -84,46 +81,56 @@ class SigmoidCKKS {
             ct = cc->Encrypt(keyPair.publicKey, ptEncoded);
         }
 
+        void decrypt() {
+            cc->Decrypt(keyPair.secretKey, ct, &result);
+            result->SetLength(inputVector.size());
+        }
+
+        vector<complex<double>> getCryptoResult() {
+            return result->GetCKKSPackedValue();
+        }
+
         double sigmoid(double x) {
             return 1.0 / (1.0 + exp(-x));
         }
 
-        std::vector<double> sigmoidVec() {
-            std::vector<double> result;
+        vector<double> sigmoidVec() {
+            vector<double> result;
             for(auto e : inputVector) {
                 result.push_back(sigmoid(e));
             }
             return result;
         }
 
-        std::vector<double> evalPlain() {
-            //std::cout << "##### eval plain #####" << std::endl;
+        auto evalPlain() {
+            vector<double> plainResult;
+            //cout << "##### eval plain #####" << endl;
             for(auto e : inputVector) {
                 double x = coeff.at(0);
-                //std::cout << "input: " << e << std::endl;
-                //std::cout << "x = c[0] = " << coeff.at(0) << std::endl;
+                //cout << "input: " << e << endl;
+                //cout << "x = c[0] = " << coeff.at(0) << endl;
                 auto i = degree;
                 while (i > 0) {
                     if(i % 2) {
                         x += coeff.at(i) * pow(e, i);
-                        //std::cout << "degree: " << i << std::endl;
-                        //std::cout << "x = c[" << i << "] = " << coeff.at(i) << " * " << e << "^" << i << std::endl;
+                        //cout << "degree: " << i << endl;
+                        //cout << "x = c[" << i << "] = " << coeff.at(i) << " * " << e << "^" << i << endl;
                     }
                     i--;
                 }
                 plainResult.push_back(x);
             }
-            //std::cout << "######################" << std::endl;
+            //cout << "######################" << endl;
             return plainResult;
         }
         
         template <typename T>
-        auto mape(std::vector<double> original, std::vector<T> approx) {
+        auto mape(vector<double> original, vector<T> approx) {
             double error = 0;
             for(int i = 0; i < original.size(); i++){
                 if(original[i] != 0) {
                     double diff = 0;
-                    if constexpr (std::is_same<T, std::complex<double>>::value)
+                    if constexpr (is_same<T, complex<double>>::value)
                         diff = fabs(original[i] - approx[i].real()) / original[i];
                     else 
                         diff = fabs(original[i] - approx[i]) / original[i];
@@ -135,21 +142,35 @@ class SigmoidCKKS {
             return error * 100 / original.size();
         } 
 
-        void printResults() {
-            std::cout << "\nExpected sigmoid:         " << funcResult << std::endl;
-            std::cout << "\nExpected approx:          " << plainResult << std::endl;
-            std::cout << "\nResult:                   " << cryptoResult << std::endl;
+        void printResults(vector<double> funcResult, vector<double> plainResult, vector<complex<double>> cryptoResult) {
+            cout << "\nExpected sigmoid:         " << funcResult << endl;
+            cout << "\nExpected approx:          " << plainResult << endl;
+            cout << "\nResult:                   " << cryptoResult << endl;
 
             //double mae_error = mae(sigmoid, finalResult);
             double mapeSigmoid = mape(funcResult, cryptoResult);
             double mapePlain = mape(funcResult, plainResult);
 
-            //std::cout << "\nApproximation error mae:  " << mae_error << std::endl;
-            std::cout << "\nAccuracy with mape (compared to sigmoid):                " << 100 - mapeSigmoid << "%" << std::endl;
-            std::cout << "\nAccuracy with mape (compared to plain evaluation):       " << 100 - mapePlain << "%" << std::endl;
+            //cout << "\nApproximation error mae:  " << mae_error << endl;
+            cout << "\nAccuracy with mape (compared to sigmoid):                " << 100 - mapeSigmoid << "%" << endl;
+            cout << "\nAccuracy with mape (compared to plain evaluation):       " << 100 - mapePlain << "%" << endl;
         }
 
-        auto eval13() {   
+        auto evalGen(int power, double c) { 
+            Ciphertext<DCRTPoly> x = ct;
+            if (power == 1) 
+                return cc->EvalMult(c, x);
+            else if (power == 2)
+                return cc->EvalMult(x , cc->EvalMult(c, x));
+            else if (power == 3)
+                return cc->EvalMult(cc->EvalMult(c, x), cc->EvalMult(x, x));
+            else if (power % 2) // odd
+                return cc->EvalMult(evalGen((int) (power / 2), c), evalGen((int) (power / 2), c));
+            else 
+                return cc->EvalSquare(evalGen(power / 2, c));
+        }   
+
+        void eval13() {   
             auto c_x1 = ct;
             auto c_x2 = cc->EvalMult(c_x1,c_x1);
             auto c_x3 = cc->EvalMult(c_x1,c_x2);
@@ -185,12 +206,19 @@ class SigmoidCKKS {
             auto eval_6 = cc->EvalAdd(cc->EvalMult(e_t2,e_t3),eval_5);
             auto eval_7 = cc->EvalAdd(cc->EvalMult(f_t2,f_t3),eval_6);
 
-            return eval_7;
+            ct = eval_7;
+        }
+
+        auto eval() {
+            encrypt();
+            eval13();
+            decrypt();
+            return getCryptoResult();
         }
 };
 
 int main() {
-    std::vector<double> coeff({
+    vector<double> coeff({
         5.00000000e-01, 2.26806218e-01, 0.0, -1.07117799e-02,
         0.0,            3.52123152e-04, 0.0, -7.05240422e-06,
         0.0,            8.99430008e-08, 0.0, -7.61584664e-10,
@@ -202,12 +230,15 @@ int main() {
         0.0
     });
 
-    std::vector<double> inputVector = {0.25, 0.5, 0.75, 1.0, 2.0};
+    vector<double> inputVector = {0.25, 0.5, 0.75, 1.0, 2.0};
 
     uint32_t multDepth = 4;
     uint32_t degree = 13;
 
     SigmoidCKKS sigmoidCKKS(multDepth, degree, inputVector, coeff);
-    sigmoidCKKS.eval13();
-    sigmoidCKKS.printResults();
+    vector<complex<double>> cryptoResult = sigmoidCKKS.eval();
+    vector<double> plainResult = sigmoidCKKS.evalPlain();
+    vector<double> sigmoidResult = sigmoidCKKS.sigmoidVec();
+
+    sigmoidCKKS.printResults(sigmoidResult, plainResult, cryptoResult);
 }
