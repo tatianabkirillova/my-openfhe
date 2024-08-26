@@ -166,6 +166,15 @@ class SigmoidCKKS {
                 return cc->EvalSquare(evalGen(power / 2, c));
         }   
 
+        auto evalSum() {
+            auto d = degree;
+            auto eval = coeff[0];
+            while (d) {
+                eval = cc->EvalAdd(eval, evalGen(d, coeff[d]));
+                d--;
+            }
+        }
+
         void eval13() {   
             auto c_x1 = ct;
             auto c_x2 = cc->EvalMult(c_x1,c_x1);
