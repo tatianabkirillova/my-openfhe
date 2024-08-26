@@ -160,10 +160,6 @@ class SigmoidCKKS {
             Ciphertext<DCRTPoly> x = ct;
             if (power == 1) 
                 return cc->EvalMult(c, x);
-            else if (power == 2)
-                return cc->EvalMult(x , cc->EvalMult(c, x));
-            else if (power == 3)
-                return cc->EvalMult(cc->EvalMult(c, x), cc->EvalMult(x, x));
             else if (power % 2) // odd
                 return cc->EvalMult(evalGen((int) (power / 2), c), evalGen((int) (power / 2), c));
             else 
