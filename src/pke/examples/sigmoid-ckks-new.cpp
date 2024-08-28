@@ -35,6 +35,8 @@ class SigmoidCKKS {
 
         Plaintext result;
 
+        bool isMult = false;
+
         SigmoidCKKS(uint32_t multDepth_, 
                     uint32_t degree_, 
                     vector<double> inputVector_,
@@ -158,21 +160,41 @@ class SigmoidCKKS {
 
         auto evalGen(int power, double c) { 
             Ciphertext<DCRTPoly> x = ct;
-            if (power == 1) 
-                return cc->EvalMult(c, x);
-            else if (power % 2) // odd
-                return cc->EvalMult(evalGen((int) (power / 2), c), evalGen((int) (power / 2), c));
-            else 
+            if (power == 1) {
+                if(!isMult) {
+                    isMult = true;
+                    cout << "c * x" << endl;
+                    return cc->EvalMult(c, x);
+                }
+                else {
+                    cout << "x" << endl;
+                    return x;
+                }
+            }
+            else if (power % 2) {// odd 
+                cout  << "x^" << (int) (power / 2) << " * x^" << (int) (power / 2) + 1 << endl;
+                return cc->EvalMult(evalGen((int) (power / 2), c), evalGen((int) (power / 2) + 1, c));
+            }
+            else {
+                cout  << "x^" << (int) (power / 2) << " * x^" << (int) (power / 2) << endl;
                 return cc->EvalSquare(evalGen(power / 2, c));
+            }
         }   
 
-        auto evalSum() {
+        void evalSum() {
             auto d = degree;
-            auto eval = coeff[0];
-            while (d) {
+
+            cout << "eval = c0 + evalGen(1, c1)" << endl;
+            auto eval = cc->EvalAdd(coeff[0], evalGen(1, coeff[1]));
+            isMult = false;
+            while (d > 1) {
+                cout << "eval = eval + evalGen(" << d << ", c" << d << ")" << endl;
                 eval = cc->EvalAdd(eval, evalGen(d, coeff[d]));
+                isMult = false;
                 d--;
             }
+
+            ct = eval;
         }
 
         void eval13() {   
@@ -216,7 +238,8 @@ class SigmoidCKKS {
 
         auto eval() {
             encrypt();
-            eval13();
+            //eval13();
+            evalSum();
             decrypt();
             return getCryptoResult();
         }
