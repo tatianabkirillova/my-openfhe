@@ -44,14 +44,27 @@ class SigmoidCKKS {
             this->scaleModSize = 50;
             this->batchSize = 8;
             
-            this->multDepth = multDepth_;
             this->degree = degree_;
+            this->multDepth = multDepth_ ? multDepth_ : getMultDepth(degree);
             
             this->inputVector = inputVector_;
             this->coeff = coeff_;      
 
             initCryptoContext();   
             initKeyPair();
+        }
+
+        uint32_t getMultDepth(uint32_t d) {
+            if(d < 4) 
+                return 2;
+            if(d < 8) 
+                return 3;
+            if(d < 16) 
+                return 4;
+            if(d < 32) 
+                return 5;
+            else
+                return 0;
         }
 
         void initCryptoContext() {
@@ -151,7 +164,7 @@ class SigmoidCKKS {
 
             //double mae_error = mae(sigmoid, finalResult);
             double mapeSigmoid = mape(funcResult, cryptoResult);
-            double mapePlain = mape(funcResult, plainResult);
+            double mapePlain = mape(plainResult, cryptoResult);
 
             //cout << "\nApproximation error mae:  " << mae_error << endl;
             cout << "\nAccuracy with mape (compared to sigmoid):                " << 100 - mapeSigmoid << "%" << endl;
@@ -163,20 +176,20 @@ class SigmoidCKKS {
             if (power == 1) {
                 if(!isMult) {
                     isMult = true;
-                    cout << "c * x" << endl;
+                    //cout << "c * x" << endl;
                     return cc->EvalMult(c, x);
                 }
                 else {
-                    cout << "x" << endl;
+                    //cout << "x" << endl;
                     return x;
                 }
             }
             else if (power % 2) {// odd 
-                cout  << "x^" << (int) (power / 2) << " * x^" << (int) (power / 2) + 1 << endl;
+                //cout  << "x^" << (int) (power / 2) << " * x^" << (int) (power / 2) + 1 << endl;
                 return cc->EvalMult(evalGen((int) (power / 2), c), evalGen((int) (power / 2) + 1, c));
             }
             else {
-                cout  << "x^" << (int) (power / 2) << " * x^" << (int) (power / 2) << endl;
+                //cout  << "x^" << (int) (power / 2) << " * x^" << (int) (power / 2) << endl;
                 return cc->EvalSquare(evalGen(power / 2, c));
             }
         }   
@@ -184,11 +197,11 @@ class SigmoidCKKS {
         void evalSum() {
             auto d = degree;
 
-            cout << "eval = c0 + evalGen(1, c1)" << endl;
+            //cout << "eval = c0 + evalGen(1, c1)" << endl;
             auto eval = cc->EvalAdd(coeff[0], evalGen(1, coeff[1]));
             isMult = false;
             while (d > 1) {
-                cout << "eval = eval + evalGen(" << d << ", c" << d << ")" << endl;
+                //cout << "eval = eval + evalGen(" << d << ", c" << d << ")" << endl;
                 eval = cc->EvalAdd(eval, evalGen(d, coeff[d]));
                 isMult = false;
                 d--;
@@ -236,9 +249,15 @@ class SigmoidCKKS {
             ct = eval_7;
         }
 
+        auto evalHard() {
+            encrypt();
+            eval13();
+            decrypt();
+            return getCryptoResult();
+        }
+
         auto eval() {
             encrypt();
-            //eval13();
             evalSum();
             decrypt();
             return getCryptoResult();
@@ -260,13 +279,27 @@ int main() {
 
     vector<double> inputVector = {0.25, 0.5, 0.75, 1.0, 2.0};
 
-    uint32_t multDepth = 4;
-    uint32_t degree = 13;
-
-    SigmoidCKKS sigmoidCKKS(multDepth, degree, inputVector, coeff);
-    vector<complex<double>> cryptoResult = sigmoidCKKS.eval();
+    SigmoidCKKS sigmoidCKKS(4, 13, inputVector, coeff);
+    cout << "\n############################## DEGREE " << 13 << " ##############################" << endl;
+    cout << "MUlT DEPTH: " << sigmoidCKKS.multDepth << endl;
+    vector<complex<double>> cryptoResult = sigmoidCKKS.evalHard();
     vector<double> plainResult = sigmoidCKKS.evalPlain();
     vector<double> sigmoidResult = sigmoidCKKS.sigmoidVec();
 
     sigmoidCKKS.printResults(sigmoidResult, plainResult, cryptoResult);
+
+
+    vector<uint32_t> degrees = {13, 15, 31, };
+
+    for(uint32_t degree: degrees) {
+        SigmoidCKKS sigmoidCKKS(0, degree, inputVector, coeff);
+        cout << "\n############################## DEGREE " << degree << " ##############################" << endl;
+        cout << "MUlT DEPTH: " << sigmoidCKKS.multDepth << endl;
+
+        vector<complex<double>> cryptoResult = sigmoidCKKS.eval();
+        vector<double> plainResult = sigmoidCKKS.evalPlain();
+        vector<double> sigmoidResult = sigmoidCKKS.sigmoidVec();
+
+        sigmoidCKKS.printResults(sigmoidResult, plainResult, cryptoResult);
+    }
 }

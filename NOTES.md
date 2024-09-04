@@ -50,7 +50,6 @@ The goal of this research is to test and evaluate the performance of different a
 - [x] test the accuracy
 - [ ] figure out when to split coefficients: thresholds
 - [ ] test different functions
-- [ ] transform to python?
 - [ ] figure out what parameters scaleModSize & batchSize do
 
 # Polyfit
@@ -61,3 +60,26 @@ I use numpy.polynomial to generate coefficients for the chebyshev approximation 
 
 Using MAPE to measure accuracy 
 
+# Splitting 
+
+The higher degree the more accurate is the approximation.
+
+Too small coefficients result in a computational error
+
+Precision according to IEEE 754 standard:
+
+single precision 32-bit: around 7 decimal digits
+
+double precision 64-bit: around 15-17 decimal digits
+
+# Errors
+
+```
+Plaintext: (0.25, 0.5, 0.75, 1, 2,  ... ); Estimated precision: 50 bits
+
+terminate called after throwing an instance of 'lbcrypto::OpenFHEException'
+  what():  /home/tatiana/BA/my-openfhe/src/pke/lib/encoding/ckkspackedencoding.cpp:l.537:Decode(): The decryption failed because the approximation error is too high. Check the parameters. 
+Aborted (core dumped)
+
+```
+The error means the set multiplicative depth is too small
