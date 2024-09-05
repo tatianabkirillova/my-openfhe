@@ -35,7 +35,10 @@ class SigmoidCKKS {
 
         Plaintext result;
 
-        bool isMult = false;
+        bool coeffAdded = false;
+        int splitCntr = -1; // -1: no split 
+        vector<double> splitParts;
+        double scaleBy;
 
         SigmoidCKKS(uint32_t multDepth_, 
                     uint32_t degree_, 
@@ -63,8 +66,16 @@ class SigmoidCKKS {
                 return 4;
             if(d < 32) 
                 return 5;
+            if(d < 64)
+                return 6;
             else
                 return 0;
+        }
+
+        void enableSplitting(double scaleBy, vector<double> splitParts) {
+            this->splitParts = splitParts;
+            this->splitCntr = splitParts.size();
+            this->scaleBy = scaleBy;
         }
 
         void initCryptoContext() {
@@ -171,18 +182,40 @@ class SigmoidCKKS {
             cout << "\nAccuracy with mape (compared to plain evaluation):       " << 100 - mapePlain << "%" << endl;
         }
 
+        auto baseWithSplitting(Ciphertext<DCRTPoly> x, double c) {
+            if(!coeffAdded) {
+                coeffAdded = true;
+                //cout << c << " * " << scaleBy << " * x" << endl;
+                return cc->EvalMult(c * scaleBy, x);
+            }
+            if(splitCntr) { // if a part of a split coefficient is still left
+                splitCntr--;
+                return cc->EvalMult(splitParts[splitCntr], x);
+            }
+            else {
+                return x;
+            }
+        }
+
+        auto base(Ciphertext<DCRTPoly> x, double c) {
+            if(!coeffAdded) {
+                    coeffAdded = true;
+                    //cout << "c * x" << endl;
+                    return cc->EvalMult(c, x);
+            }
+            else {
+                //cout << "x" << endl;
+                return x;
+            }
+        }
+
         auto evalGen(int power, double c) { 
             Ciphertext<DCRTPoly> x = ct;
             if (power == 1) {
-                if(!isMult) {
-                    isMult = true;
-                    //cout << "c * x" << endl;
-                    return cc->EvalMult(c, x);
+                if(splitCntr != -1) {
+                    return baseWithSplitting(x, c);
                 }
-                else {
-                    //cout << "x" << endl;
-                    return x;
-                }
+                return base(x, c);
             }
             else if (power % 2) {// odd 
                 //cout  << "x^" << (int) (power / 2) << " * x^" << (int) (power / 2) + 1 << endl;
@@ -199,11 +232,11 @@ class SigmoidCKKS {
 
             //cout << "eval = c0 + evalGen(1, c1)" << endl;
             auto eval = cc->EvalAdd(coeff[0], evalGen(1, coeff[1]));
-            isMult = false;
+            coeffAdded = false;
             while (d > 1) {
                 //cout << "eval = eval + evalGen(" << d << ", c" << d << ")" << endl;
                 eval = cc->EvalAdd(eval, evalGen(d, coeff[d]));
-                isMult = false;
+                coeffAdded = false;
                 d--;
             }
 
@@ -279,17 +312,50 @@ int main() {
 
     vector<double> inputVector = {0.25, 0.5, 0.75, 1.0, 2.0};
 
-    SigmoidCKKS sigmoidCKKS(4, 13, inputVector, coeff);
-    cout << "\n############################## DEGREE " << 13 << " ##############################" << endl;
-    cout << "MUlT DEPTH: " << sigmoidCKKS.multDepth << endl;
-    vector<complex<double>> cryptoResult = sigmoidCKKS.evalHard();
-    vector<double> plainResult = sigmoidCKKS.evalPlain();
-    vector<double> sigmoidResult = sigmoidCKKS.sigmoidVec();
+    /*
 
-    sigmoidCKKS.printResults(sigmoidResult, plainResult, cryptoResult);
+    // hard coded evaluation
+    SigmoidCKKS sigmoidCKKSHard(4, 13, inputVector, coeff);
+    cout << "\n####################### HARD DEGREE " << 13 << " ##############################" << endl;
+    cout << "MUlT DEPTH: " << sigmoidCKKSHard.multDepth << endl;
+    vector<complex<double>> cryptoResult = sigmoidCKKSHard.evalHard();
+    vector<double> plainResult = sigmoidCKKSHard.evalPlain();
+    vector<double> sigmoidResult = sigmoidCKKSHard.sigmoidVec();
 
+    sigmoidCKKSHard.printResults(sigmoidResult, plainResult, cryptoResult);
 
-    vector<uint32_t> degrees = {13, 15, 31, };
+    // generated with splitting DEGREE 13
+    SigmoidCKKS sigmoidCKKSsplit(4, 13, inputVector, coeff);
+    cout << "\n#### Generated with splitting DEGREE " << 13 << " ##############################" << endl;
+    cout << "MUlT DEPTH: " << sigmoidCKKSsplit.multDepth << endl;
+
+    vector<double> splitParts = {(double)(1.0e-06), (double)(1.0e-06)};
+
+    sigmoidCKKSsplit.enableSplitting(pow(10,12), splitParts);
+
+    vector<complex<double>> cryptoResultSplit = sigmoidCKKSsplit.evalHard();
+    vector<double> plainResultSplit = sigmoidCKKSsplit.evalPlain();
+    vector<double> sigmoidResultSplit = sigmoidCKKSsplit.sigmoidVec();
+
+    sigmoidCKKSsplit.printResults(sigmoidResultSplit, plainResultSplit, cryptoResultSplit);*/
+
+    // generated with splitting DEGREE 27
+    SigmoidCKKS sigmoidCKKSsplit27(5, 27, inputVector, coeff);
+    cout << "\n#### Generated with splitting DEGREE " << 27 << " ##############################" << endl;
+    cout << "MUlT DEPTH: " << sigmoidCKKSsplit27.multDepth << endl;
+
+    vector<double> splitParts = {(double)(1.0e-08), (double)(1.0e-08), (double)(1.0e-08), (double)(1.0e-07)};
+
+    sigmoidCKKSsplit27.enableSplitting(pow(10,31), splitParts);
+
+    vector<complex<double>> cryptoResult = sigmoidCKKSsplit27.evalHard();
+    vector<double> plainResult = sigmoidCKKSsplit27.evalPlain();
+    vector<double> sigmoidResult = sigmoidCKKSsplit27.sigmoidVec();
+
+    sigmoidCKKSsplit27.printResults(sigmoidResult, plainResult, cryptoResult);
+
+    
+    vector<uint32_t> degrees = {13};
 
     for(uint32_t degree: degrees) {
         SigmoidCKKS sigmoidCKKS(0, degree, inputVector, coeff);
@@ -302,4 +368,5 @@ int main() {
 
         sigmoidCKKS.printResults(sigmoidResult, plainResult, cryptoResult);
     }
+    
 }
