@@ -364,7 +364,19 @@ int main() {
         0.0
     });
 
+    vector<vector<double>> inputs;
     vector<double> inputVector = {0.25, 0.5, 0.75, 1.0, 2.0};
+
+    inputs.push_back({0.8292, 0.2124, 0.4418, 0.1135, 0.0177});
+    inputs.push_back({0.4157, 0.3776, 0.0808, 0.7062, 0.0524});
+    inputs.push_back({0.6659, 0.0601, 0.3564, 0.5814, 0.8935});
+    inputs.push_back({0.4320, 0.8598, 0.9240, 0.4750, 0.2853});
+    inputs.push_back({0.1592, 0.4597, 0.6286, 0.1642, 0.2811});
+    inputs.push_back({0.7737, 0.8393, 0.1580, 0.4933, 0.9973});
+    inputs.push_back({0.8997, 0.8043, 0.7954, 0.0918, 0.4436});
+    inputs.push_back({0.7965, 0.6646, 0.8311, 0.7833, 0.4030});
+    inputs.push_back({0.1581, 0.7397, 0.6560, 0.2352, 0.0388});
+    inputs.push_back({0.0761, 0.1767, 0.1927, 0.5325, 0.4199});
 
     //evaluateWithSplitting(0, 13, inputVector, coeff, pow(10,12), {(double)(1.0e-06), (double)(1.0e-06)});
 
@@ -372,10 +384,10 @@ int main() {
     //evaluateWithSplitting(0, 27, inputVector, coeff, pow(10,31), splitCoeff);
 
     vector<uint32_t> degrees = {13, 31};
-    for(uint32_t degree: degrees) {
+    for(auto input: inputs) {
         // SigmoidCKKS sigmoidCKKS(0, degree, inputVector, coeffs, false, false);
         // sigmoidCKKS.eval();
-        SigmoidCKKS sigmoidCKKSpoly(0, degree, inputVector, coeffs, false, false);
+        SigmoidCKKS sigmoidCKKSpoly(0, 13, input, coeffs, false, false);
         sigmoidCKKSpoly.eval();
     }
 }
