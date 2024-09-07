@@ -240,54 +240,14 @@ class SigmoidCKKS {
 
             //cout << "eval = c0 + evalGen(1, c1)" << endl;
             auto eval = cc->EvalAdd(coeff[0], evalGen(1, coeff[1]));
-            coeffAdded = false;
             while (d > 1) {
                 //cout << "eval = eval + evalGen(" << d << ", c" << d << ")" << endl;
-                eval = cc->EvalAdd(eval, evalGen(d, coeff[d]));
                 coeffAdded = false;
+                eval = cc->EvalAdd(eval, evalGen(d, coeff[d]));
                 d--;
             }
 
             ct = eval;
-        }
-
-        void eval13() {   
-            auto c_x1 = ct;
-            auto c_x2 = cc->EvalMult(c_x1,c_x1);
-            auto c_x3 = cc->EvalMult(c_x1,c_x2);
-            auto c_x4 = cc->EvalMult(c_x2,c_x2);
-            auto c_x5 = cc->EvalMult(c_x2,c_x3);
-            
-            auto g_t=cc->EvalMult(cc->EvalMult(c_x1,(double)(1.0e-03)),c_x1);//2
-            auto g_t1=cc->EvalMult(cc->EvalMult(c_x1,(double)(coeff[9]*pow(10,6))),c_x1);//2
-
-            auto g_t2=cc-> EvalSquare(g_t);//3 x^4
-            auto g_t3=cc->EvalMult(g_t1,c_x3);//3 x^5
-            
-            auto e_t=cc->EvalMult(cc->EvalMult(c_x1,(double)(1.0e-05)),c_x2);//2
-            auto e_t1=cc->EvalMult(cc->EvalMult(c_x1,(double)(coeff[11]*pow(10,10))),c_x1);//2
-
-            auto e_t2=cc-> EvalSquare(e_t);//3 x^6
-            auto e_t3=cc->EvalMult(e_t1,c_x3);//3 x^5
-            
-            
-            auto f_t=cc->EvalMult(cc->EvalMult(c_x1,(double)(1.0e-06)),c_x2);//2
-            auto f_t1=cc->EvalMult(cc->EvalMult(c_x1,(double)(coeff[13]*pow(10,12))),c_x2);//2 why is here coeff 13
-
-            auto f_t2=cc-> EvalSquare(f_t);//3 x^6
-            auto f_t3=cc->EvalMult(f_t1,c_x4);//3 x^7
-            
-            
-            auto eval_1 = cc->EvalAdd(cc->EvalMult(c_x1,coeff[1]),coeff[0]);
-            auto eval_2 = cc->EvalAdd(cc->EvalMult(cc->EvalMult(c_x2,coeff[3]),c_x1),eval_1);
-
-            auto eval_3 = cc->EvalAdd(cc->EvalMult(cc->EvalMult(c_x3,coeff[5]),c_x2),eval_2);
-            auto eval_4 = cc->EvalAdd(cc->EvalMult(cc->EvalMult(c_x4,coeff[7]),c_x3),eval_3);
-            auto eval_5 = cc->EvalAdd(cc->EvalMult(g_t2,g_t3),eval_4);
-            auto eval_6 = cc->EvalAdd(cc->EvalMult(e_t2,e_t3),eval_5);
-            auto eval_7 = cc->EvalAdd(cc->EvalMult(f_t2,f_t3),eval_6);
-
-            ct = eval_7;
         }
 
         // auto evalHard() {
