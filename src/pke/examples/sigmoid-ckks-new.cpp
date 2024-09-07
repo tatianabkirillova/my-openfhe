@@ -34,12 +34,14 @@ class SigmoidCKKS {
         Plaintext result;
 
         bool splittingEnabled;
+        bool poly;
 
         SigmoidCKKS(uint32_t multDepth_, 
                     uint32_t degree_, 
                     vector<double> inputVector_,
                     vector<double> coeffs_,
-                    bool splittingEnabled_) {
+                    bool splittingEnabled_,
+                    bool poly_) {
             this->scaleModSize = 50;
             this->batchSize = 8;
             
@@ -50,6 +52,7 @@ class SigmoidCKKS {
             this->coeffs = coeffs_;    
 
             this->splittingEnabled = splittingEnabled_;
+            this->poly = poly_;
 
             initCryptoContext();   
             initKeyPair();
@@ -194,6 +197,21 @@ class SigmoidCKKS {
             return error * 100 / original.size();
         } 
 
+        template <typename T>
+        auto mse(std::vector<double> original, std::vector<T> approx) {
+            double error = 0;
+            for(int i = 0; i < original.size(); i++){
+                auto diff = 0;
+                if constexpr (std::is_same<T, std::complex<double>>::value)
+                    diff = original[i] - approx[i].real();
+                else
+                    diff = original[i] - approx[i];
+                error += diff * diff;
+            }
+            
+            return error / original.size() * 100;
+        } 
+
         void printResults(vector<double> funcResult, vector<double> plainResult, vector<complex<double>> cryptoResult) {
             cout << "\n#######################################################################" << endl;
             cout << "SPLITTING: " << (splittingEnabled ? "ON" : "OFF") << endl;
@@ -203,11 +221,11 @@ class SigmoidCKKS {
             cout << "\nExpected approx:          " << plainResult << endl;
             cout << "\nResult:                   " << cryptoResult << endl;
 
-            double mapeSigmoid = mape(funcResult, cryptoResult);
-            double mapePlain = mape(plainResult, cryptoResult);
+            double mseSigmoid = mse(funcResult, cryptoResult);
+            double msePlain = mse(plainResult, cryptoResult);
 
-            cout << "\nAccuracy with mape (compared to sigmoid):                " << 100 - mapeSigmoid << "%" << endl;
-            cout << "\nAccuracy with mape (compared to plain evaluation):       " << 100 - mapePlain << "%" << endl;
+            cout << "\nAccuracy with mse (compared to sigmoid):                " << 100 - mseSigmoid << "%" << endl;
+            cout << "\nAccuracy with mse (compared to plain evaluation):       " << 100 - msePlain << "%" << endl;
         }
 
         void pregenerate(uint32_t degree) {
@@ -305,6 +323,11 @@ class SigmoidCKKS {
             if(splittingEnabled) {
                 evalSumSplitting();
             }
+            else if(poly) {
+                cout << "EVAL POLY" << endl;
+                coeffs.resize(degree + 1);
+                ct = cc->EvalPoly(ct, coeffs);
+            }
             else {
                 evalSum();
             }
@@ -348,12 +371,11 @@ int main() {
     //vector<double> splitCoeff = {(double)(1.0e-08), (double)(1.0e-08), (double)(1.0e-08), (double)(1.0e-07)};
     //evaluateWithSplitting(0, 27, inputVector, coeff, pow(10,31), splitCoeff);
 
-    vector<uint32_t> degrees = {13, 31, 63};
+    vector<uint32_t> degrees = {13, 31};
     for(uint32_t degree: degrees) {
-        SigmoidCKKS sigmoidCKKS(0, degree, inputVector, coeffs, false);
-        sigmoidCKKS.eval();
+        // SigmoidCKKS sigmoidCKKS(0, degree, inputVector, coeffs, false, false);
+        // sigmoidCKKS.eval();
+        SigmoidCKKS sigmoidCKKSpoly(0, degree, inputVector, coeffs, false, false);
+        sigmoidCKKSpoly.eval();
     }
-
-    SigmoidCKKS sigmoidCKKS(0, 13, inputVector, coeffs, true);
-    sigmoidCKKS.eval();
 }
