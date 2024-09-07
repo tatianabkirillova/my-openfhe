@@ -33,13 +33,14 @@ class SigmoidCKKS {
 
         Plaintext result;
 
-        bool splittingEnabled = false;
+        bool splittingEnabled;
         vector<double> splitCoeff;
 
         SigmoidCKKS(uint32_t multDepth_, 
                     uint32_t degree_, 
                     vector<double> inputVector_,
-                    vector<double> coeffs_) {
+                    vector<double> coeffs_,
+                    bool splittingEnabled_) {
             this->scaleModSize = 50;
             this->batchSize = 8;
             
@@ -47,7 +48,12 @@ class SigmoidCKKS {
             this->multDepth = multDepth_ ? multDepth_ : getMultDepth();
             
             this->inputVector = inputVector_;
-            this->coeffs = coeffs_;      
+            this->coeffs = coeffs_;    
+
+            this->splittingEnabled = splittingEnabled_;
+            if (splittingEnabled) {
+                enableSplitting();
+            }
 
             initCryptoContext();   
             initKeyPair();
@@ -273,23 +279,6 @@ class SigmoidCKKS {
         }
 };
 
-void evaluateWithSplitting(uint32_t depth, uint32_t degree, std::vector<double> inputVector, std::vector<double> coeff, double scaleBy, vector<double> splitCoeff) {
-    SigmoidCKKS sigmoidCKKS(depth, degree, inputVector, coeff);
-
-    sigmoidCKKS.enableSplitting();
-
-    clock_t start = clock();
-    vector<complex<double>> cryptoResult = sigmoidCKKS.eval();
-    clock_t end = clock();
-
-    vector<double> plainResult = sigmoidCKKS.evalPlain();
-    vector<double> sigmoidResult = sigmoidCKKS.sigmoidVec();
-
-    sigmoidCKKS.printResults(sigmoidResult, plainResult, cryptoResult);
-
-    cout << "Time: " << ((double)(end - start)) / CLOCKS_PER_SEC << "s" << endl;
-}
-
 int main() {
     vector<double> coeffs({
         5.00000040e-01,  2.30471326e-01, 0.0, -1.15966777e-02,
@@ -320,7 +309,7 @@ int main() {
 
     vector<uint32_t> degrees = {13, 27, 63};
     for(uint32_t degree: degrees) {
-        SigmoidCKKS sigmoidCKKS(0, degree, inputVector, coeffs);
+        SigmoidCKKS sigmoidCKKS(0, degree, inputVector, coeffs, false);
         sigmoidCKKS.eval();
     }
 }
