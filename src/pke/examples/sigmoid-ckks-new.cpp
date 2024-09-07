@@ -34,7 +34,6 @@ class SigmoidCKKS {
         Plaintext result;
 
         bool splittingEnabled;
-        vector<double> splitCoeff;
 
         SigmoidCKKS(uint32_t multDepth_, 
                     uint32_t degree_, 
@@ -51,9 +50,6 @@ class SigmoidCKKS {
             this->coeffs = coeffs_;    
 
             this->splittingEnabled = splittingEnabled_;
-            if (splittingEnabled) {
-                enableSplitting();
-            }
 
             initCryptoContext();   
             initKeyPair();
@@ -75,34 +71,37 @@ class SigmoidCKKS {
                 return 0;
         }
 
-        void enableSplitting() {
-            splittingEnabled = true;
-            for(auto &c : coeffs) {    
-                if (abs(c) < (double)(1.0e-80)) {
-                    c = c * (1.0e80);
-                    for(int i = 0; i < 16; i++) {
-                        splitCoeff.push_back((double)(1.0e-05));
-                    }
-                }
-                else if (abs(c) < (double)(1.0e-40)) {
-                    c = c * (1.0e40);
-                    for(int i = 0; i < 8; i++) {
-                        splitCoeff.push_back((double)(1.0e-05));
-                    }
-                }
-                else if (abs(c) < (double)(1.0e-20)) {
-                    c = c * (1.0e20);
-                    for(int i = 0; i < 4; i++) {
-                        splitCoeff.push_back((double)(1.0e-05));
-                    }
-                }
-                else if (abs(c) < (double)(1.0e-10)) { 
-                    c = c * (1.0e10);
-                    for(int i = 0; i < 2; i++) {
-                        splitCoeff.push_back((double)(1.0e-05));
-                    }                
+        vector<double> getSplitCoeff(double c) {
+            vector<double> splitCoeff;
+            if (abs(c) < (double)(1.0e-80)) {
+                cout << "abs(c) < (double)(1.0e-80) " << c << endl;
+                splitCoeff.push_back(c * (1.0e80));
+                for(int i = 0; i < 16; i++) {
+                    splitCoeff.push_back((double)(1.0e-05));
                 }
             }
+            else if (abs(c) < (double)(1.0e-40)) {
+                cout << "abs(c) < (double)(1.0e-80) " << c << endl;
+                splitCoeff.push_back(c * (1.0e40));
+                for(int i = 0; i < 8; i++) {
+                    splitCoeff.push_back((double)(1.0e-05));
+                }
+            }
+            else if (abs(c) < (double)(1.0e-20)) {
+                cout << "abs(c) < (double)(1.0e-80) " << c << endl;
+                splitCoeff.push_back(c * (1.0e20));
+                for(int i = 0; i < 4; i++) {
+                    splitCoeff.push_back((double)(1.0e-05));
+                }
+            }
+            else if (abs(c) < (double)(1.0e-10)) { 
+                cout << "abs(c) < (double)(1.0e-80) " << c << endl;
+                splitCoeff.push_back(c * (1.0e10));
+                for(int i = 0; i < 2; i++) {
+                    splitCoeff.push_back((double)(1.0e-05));
+                }                
+            }
+            return splitCoeff;
         }
 
         void initCryptoContext() {
@@ -227,26 +226,66 @@ class SigmoidCKKS {
             }
         }
 
-        auto evalGen(int power, double c) { 
+        auto evalTreeSplitting(int power, vector<double> splitCoeff, bool fromOdd) {
+            auto size = splitCoeff.size();
+            printf("cntr: %zu\n", size);
+
+            Ciphertext<DCRTPoly> x = ct;
+            if (power == 1) {
+                if(fromOdd && size) {
+                    Ciphertext<DCRTPoly> cx = cc->EvalMult(splitCoeff[size - 1], x);
+                    splitCoeff.pop_back();
+                    return cx;
+                }
+                return x;
+            }
+            else if (power % 2) { // odd
+                return cc->EvalMult(evalTreeSplitting((int) (power / 2), splitCoeff, true), evalTreeSplitting((int) (power / 2) + 1, splitCoeff, true));
+            }
+            else { // even
+                //cout  << "x^" << (int) (power / 2) << " * x^" << (int) (power / 2) + 1 << endl;
+                return cc->EvalMult(evalTreeSplitting((int) (power / 2), splitCoeff, false), evalTreeSplitting((int) (power / 2), splitCoeff, false));
+            }
+        }
+
+        void evalSumSplitting() {
+            pregenerate(degree);
+
+            //cout << "eval = c0 + evalTree(1, c1)" << endl;
+            auto d = degree;
+            auto eval = cc->EvalAdd(coeffs[0], evalTreeSplitting(1, getSplitCoeff(coeffs[1]), true));
+            while (d > 1) {
+                //cout << "eval = eval + evalTree(" << d << ", c" << d << ")" << endl;
+                eval = cc->EvalAdd(eval, evalTreeSplitting(d, getSplitCoeff(coeffs[d]), d % 2));
+                d--;
+            }
+
+            ct = eval;
+        }
+
+        auto evalTree(int power, double c) { 
             Ciphertext<DCRTPoly> x = ct;
             if (power == 1) {
                 return cc->EvalMult(c, x);
             }
-            else {// odd 
+            else if (power % 2) { // odd
+                return cc->EvalMult(evalTree((int) (power / 2), c), xMap[(int) (power / 2) + 1]);
+            }
+            else { // even
                 //cout  << "x^" << (int) (power / 2) << " * x^" << (int) (power / 2) + 1 << endl;
-                return cc->EvalMult(evalGen((int) (power / 2), c), xMap[(int) (power / 2) + 1]);
+                return cc->EvalMult(evalTree((int) (power / 2), c), xMap[(int) (power / 2)]);
             }
         }   
 
         void evalSum() {
             pregenerate(degree);
 
-            //cout << "eval = c0 + evalGen(1, c1)" << endl;
+            //cout << "eval = c0 + evalTree(1, c1)" << endl;
             auto d = degree;
-            auto eval = cc->EvalAdd(coeffs[0], evalGen(1, coeffs[1]));
+            auto eval = cc->EvalAdd(coeffs[0], evalTree(1, coeffs[1]));
             while (d > 1) {
-                //cout << "eval = eval + evalGen(" << d << ", c" << d << ")" << endl;
-                eval = cc->EvalAdd(eval, evalGen(d, coeffs[d]));
+                //cout << "eval = eval + evalTree(" << d << ", c" << d << ")" << endl;
+                eval = cc->EvalAdd(eval, evalTree(d, coeffs[d]));
                 d--;
             }
 
@@ -263,7 +302,12 @@ class SigmoidCKKS {
         auto eval() {
             clock_t start = clock();
             encrypt();
-            evalSum();
+            if(splittingEnabled) {
+                evalSumSplitting();
+            }
+            else {
+                evalSum();
+            }
             decrypt();
             clock_t end = clock();
             
@@ -304,9 +348,12 @@ int main() {
     //vector<double> splitCoeff = {(double)(1.0e-08), (double)(1.0e-08), (double)(1.0e-08), (double)(1.0e-07)};
     //evaluateWithSplitting(0, 27, inputVector, coeff, pow(10,31), splitCoeff);
 
-    vector<uint32_t> degrees = {13, 27, 63};
+    vector<uint32_t> degrees = {13, 31, 63};
     for(uint32_t degree: degrees) {
         SigmoidCKKS sigmoidCKKS(0, degree, inputVector, coeffs, false);
         sigmoidCKKS.eval();
     }
+
+    SigmoidCKKS sigmoidCKKS(0, 13, inputVector, coeffs, true);
+    sigmoidCKKS.eval();
 }
