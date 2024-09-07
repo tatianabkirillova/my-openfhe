@@ -204,19 +204,16 @@ class SigmoidCKKS {
             cout << "\nExpected approx:          " << plainResult << endl;
             cout << "\nResult:                   " << cryptoResult << endl;
 
-            //double mae_error = mae(sigmoid, finalResult);
             double mapeSigmoid = mape(funcResult, cryptoResult);
             double mapePlain = mape(plainResult, cryptoResult);
 
-            //cout << "\nApproximation error mae:  " << mae_error << endl;
             cout << "\nAccuracy with mape (compared to sigmoid):                " << 100 - mapeSigmoid << "%" << endl;
             cout << "\nAccuracy with mape (compared to plain evaluation):       " << 100 - mapePlain << "%" << endl;
         }
 
         void pregenerate(uint32_t degree) {
-            Ciphertext<DCRTPoly> x = ct;
+            xMap[1] = ct;
             
-            xMap[1] = x;
             uint32_t power = 2;
             while(power <= degree) { 
                 if(power % 2) { // odd power
