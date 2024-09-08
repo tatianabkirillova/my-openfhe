@@ -76,7 +76,10 @@ class SigmoidCKKS {
 
         vector<double> getSplitCoeff(double c) {
             vector<double> splitCoeff;
-            if (abs(c) < (double)(1.0e-80)) {
+            if (!c) {
+                splitCoeff.push_back(0);
+            }
+            else if (abs(c) < (double)(1.0e-80)) {
                 cout << "abs(c) < (double)(1.0e-80) " << c << endl;
                 splitCoeff.push_back(c * (1.0e80));
                 for(int i = 0; i < 16; i++) {
@@ -84,26 +87,30 @@ class SigmoidCKKS {
                 }
             }
             else if (abs(c) < (double)(1.0e-40)) {
-                cout << "abs(c) < (double)(1.0e-80) " << c << endl;
+                cout << "abs(c) < (double)(1.0e-40) " << c << endl;
                 splitCoeff.push_back(c * (1.0e40));
                 for(int i = 0; i < 8; i++) {
                     splitCoeff.push_back((double)(1.0e-05));
                 }
             }
             else if (abs(c) < (double)(1.0e-20)) {
-                cout << "abs(c) < (double)(1.0e-80) " << c << endl;
+                cout << "abs(c) < (double)(1.0e-20) " << c << endl;
                 splitCoeff.push_back(c * (1.0e20));
                 for(int i = 0; i < 4; i++) {
                     splitCoeff.push_back((double)(1.0e-05));
                 }
             }
-            else if (abs(c) < (double)(1.0e-10)) { 
-                cout << "abs(c) < (double)(1.0e-80) " << c << endl;
+            else if (abs(c) < (double)(1.0e-16)) { 
+                cout << "abs(c) < (double)(1.0e-10) " << c << endl;
                 splitCoeff.push_back(c * (1.0e10));
                 for(int i = 0; i < 2; i++) {
                     splitCoeff.push_back((double)(1.0e-05));
                 }                
             }
+            else {
+                splitCoeff.push_back(c);
+            }
+            cout << "c: " << c <<"; splitCoeff: " << splitCoeff << endl;
             return splitCoeff;
         }
 
@@ -198,7 +205,7 @@ class SigmoidCKKS {
         } 
 
         template <typename T>
-        auto mse(std::vector<double> original, std::vector<T> approx) {
+        double mse(std::vector<double> original, std::vector<T> approx) {
             double error = 0;
             for(size_t i = 0; i < original.size(); i++){
                 auto diff = 0;
@@ -209,12 +216,13 @@ class SigmoidCKKS {
                 error += diff * diff;
             }
             
-            return error / original.size() * 100;
+            return error / (double) original.size() * 100;
         } 
 
         void printResults(vector<double> funcResult, vector<double> plainResult, vector<complex<double>> cryptoResult) {
             cout << "\n#######################################################################" << endl;
-            cout << "SPLITTING: " << (splittingEnabled ? "ON" : "OFF") << endl;
+            cout << "INPUT: " << inputVector << endl;
+            cout << "\nSPLITTING: " << (splittingEnabled ? "ON" : "OFF") << endl;
             cout << "MUlT DEPTH: " << multDepth << ", DEGREE " << degree << endl;
 
             cout << "\nExpected sigmoid:         " << funcResult << endl;
@@ -244,15 +252,15 @@ class SigmoidCKKS {
             }
         }
 
-        auto evalTreeSplitting(int power, vector<double> splitCoeff, bool fromOdd) {
-            auto size = splitCoeff.size();
-            printf("cntr: %zu\n", size);
+        auto evalTreeSplitting(int power, vector<double> *splitCoeff, bool fromOdd) {
+            auto size = splitCoeff->size();
 
             Ciphertext<DCRTPoly> x = ct;
             if (power == 1) {
                 if(fromOdd && size) {
-                    Ciphertext<DCRTPoly> cx = cc->EvalMult(splitCoeff[size - 1], x);
-                    splitCoeff.pop_back();
+                    //printf("splitCoeff[%zu] = %f\n", size - 1, splitCoeff[size - 1]);
+                    Ciphertext<DCRTPoly> cx = cc->EvalMult(splitCoeff->at(size - 1), x);
+                    splitCoeff->pop_back();
                     return cx;
                 }
                 return x;
@@ -267,14 +275,19 @@ class SigmoidCKKS {
         }
 
         void evalSumSplitting() {
-            pregenerate(degree);
+            //pregenerate(degree);
 
             //cout << "eval = c0 + evalTree(1, c1)" << endl;
             auto d = degree;
-            auto eval = cc->EvalAdd(coeffs[0], evalTreeSplitting(1, getSplitCoeff(coeffs[1]), true));
+            auto splitCoeffs = getSplitCoeff(coeffs[1]);
+            auto eval = cc->EvalAdd(coeffs[0], evalTreeSplitting(1, &splitCoeffs, true));
             while (d > 1) {
                 //cout << "eval = eval + evalTree(" << d << ", c" << d << ")" << endl;
-                eval = cc->EvalAdd(eval, evalTreeSplitting(d, getSplitCoeff(coeffs[d]), d % 2));
+                if(d % 2) {
+                    cout << "\nd: " << d << endl;
+                    auto splitCoeffs = getSplitCoeff(coeffs[d]);
+                    eval = cc->EvalAdd(eval, evalTreeSplitting(d, &splitCoeffs, true));
+                }
                 d--;
             }
 
@@ -303,19 +316,14 @@ class SigmoidCKKS {
             auto eval = cc->EvalAdd(coeffs[0], evalTree(1, coeffs[1]));
             while (d > 1) {
                 //cout << "eval = eval + evalTree(" << d << ", c" << d << ")" << endl;
-                eval = cc->EvalAdd(eval, evalTree(d, coeffs[d]));
+                if(d % 2) {
+                    eval = cc->EvalAdd(eval, evalTree(d, coeffs[d]));
+                }
                 d--;
             }
 
             ct = eval;
         }
-
-        // auto evalHard() {
-        //     encrypt();
-        //     eval13();
-        //     decrypt();
-        //     return getCryptoResult();
-        // }
 
         auto eval() {
             clock_t start = clock();
@@ -383,12 +391,14 @@ int main() {
     //vector<double> splitCoeff = {(double)(1.0e-08), (double)(1.0e-08), (double)(1.0e-08), (double)(1.0e-07)};
     //evaluateWithSplitting(0, 27, inputVector, coeff, pow(10,31), splitCoeff);
 
-    vector<uint32_t> degrees = {13, 31};
-    for(auto input: inputs) {
-        // SigmoidCKKS sigmoidCKKS(0, degree, inputVector, coeffs, false, false);
-        // sigmoidCKKS.eval();
-        cout << "Input: " << input << endl;
-        SigmoidCKKS sigmoidCKKSpoly(0, 13, input, coeffs, false, false);
-        sigmoidCKKSpoly.eval();
+    // SigmoidCKKS sigmoidCKKSpoly(0, 13, inputs[0], coeffs, true, false);
+    // sigmoidCKKSpoly.eval();
+
+    vector<uint32_t> degrees = {13, 27};
+    for(auto degree: degrees) {
+        SigmoidCKKS sigmoidCKKS(0, degree, inputs[0], coeffs, false, false);
+        sigmoidCKKS.eval();
+        SigmoidCKKS sigmoidCKKSsplit(0, degree, inputs[0], coeffs, true, false);
+        sigmoidCKKSsplit.eval();
     }
 }
