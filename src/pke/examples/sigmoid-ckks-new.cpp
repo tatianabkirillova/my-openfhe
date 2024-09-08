@@ -182,7 +182,7 @@ class SigmoidCKKS {
         template <typename T>
         auto mape(vector<double> original, vector<T> approx) {
             double error = 0;
-            for(int i = 0; i < original.size(); i++){
+            for(size_t i = 0; i < original.size(); i++){
                 if(original[i] != 0) {
                     double diff = 0;
                     if constexpr (is_same<T, complex<double>>::value)
@@ -200,7 +200,7 @@ class SigmoidCKKS {
         template <typename T>
         auto mse(std::vector<double> original, std::vector<T> approx) {
             double error = 0;
-            for(int i = 0; i < original.size(); i++){
+            for(size_t i = 0; i < original.size(); i++){
                 auto diff = 0;
                 if constexpr (std::is_same<T, std::complex<double>>::value)
                     diff = original[i] - approx[i].real();
@@ -387,6 +387,7 @@ int main() {
     for(auto input: inputs) {
         // SigmoidCKKS sigmoidCKKS(0, degree, inputVector, coeffs, false, false);
         // sigmoidCKKS.eval();
+        cout << "Input: " << input << endl;
         SigmoidCKKS sigmoidCKKSpoly(0, 13, input, coeffs, false, false);
         sigmoidCKKSpoly.eval();
     }
