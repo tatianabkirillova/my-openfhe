@@ -19,7 +19,15 @@
 using namespace lbcrypto;
 using namespace std;
 
-double splittingThresholds[] = {1.0e-80, 1.0e-40, 1.0e-20, 1.0e-10};
+vector<double> powerThresholds = {80, 40, 20, 10};
+double splitIntoPower = 5;
+
+enum Controller {
+    SPLIT_OFF,
+    SPLIT_ON,
+    POLY_OFF,
+    POLY_ON
+};
 
 class SigmoidCKKS {
     public:
@@ -35,15 +43,15 @@ class SigmoidCKKS {
 
         Plaintext result;
 
-        bool splittingEnabled;
-        bool poly;
+        Controller splitting;
+        Controller poly;
 
         SigmoidCKKS(uint32_t multDepth_, 
                     uint32_t degree_, 
                     vector<double> inputVector_,
                     vector<double> coeffs_,
-                    bool splittingEnabled_,
-                    bool poly_) {
+                    Controller splitting_,
+                    Controller poly_) {
             this->scaleModSize = 50;
             this->batchSize = 8;
             
@@ -53,7 +61,7 @@ class SigmoidCKKS {
             this->inputVector = inputVector_;
             this->coeffs = coeffs_;    
 
-            this->splittingEnabled = splittingEnabled_;
+            this->splitting = splitting_;
             this->poly = poly_;
 
             initCryptoContext();   
@@ -76,10 +84,37 @@ class SigmoidCKKS {
                 return 0;
         }
 
+        vector<double> getSplitCoeffGen(double c) {
+            vector<double> splitCoeff;
+            double highestThreshold = pow(10, -powerThresholds.back());
+            if (!c || abs(c) >= highestThreshold) {
+                splitCoeff.push_back(c);
+                cout << "c: " << c <<"; splitCoeff: " << splitCoeff << endl;
+                return splitCoeff;
+            }
+
+            for (double power: powerThresholds) {
+                double threshold = pow(10, -power);
+                double splitInto = pow(10, splitIntoPower);
+                if (abs(c) < threshold) {
+                    cout << "abs(c) < " << threshold << c << endl;
+                    splitCoeff.push_back(c * pow(10, power));
+                    for (int i = 0; i < (power / splitIntoPower); i++) {
+                        splitCoeff.push_back(splitInto);
+                    }
+                    cout << "c: " << c <<"; splitCoeff: " << splitCoeff << endl;
+                    return splitCoeff;
+                }
+            }
+  
+        }
+
         vector<double> getSplitCoeff(double c) {
             vector<double> splitCoeff;
             if (!c) {
-                splitCoeff.push_back(0);
+                splitCoeff.push_back(c);
+                cout << "c: " << c <<"; splitCoeff: " << splitCoeff << endl;
+                return splitCoeff;
             }
             else if (abs(c) < (double)(1.0e-80)) {
                 cout << "abs(c) < (double)(1.0e-80) " << c << endl;
@@ -112,7 +147,6 @@ class SigmoidCKKS {
             else {
                 splitCoeff.push_back(c);
             }
-            cout << "c: " << c <<"; splitCoeff: " << splitCoeff << endl;
             return splitCoeff;
         }
 
@@ -217,19 +251,18 @@ class SigmoidCKKS {
 
         void printResults(vector<double> funcResult, vector<double> plainResult, vector<complex<double>> cryptoResult) {
             cout << "INPUT: " << inputVector << endl;
-            cout << "\nSPLITTING: " << (splittingEnabled ? "ON" : "OFF") << endl;
+            cout << "\nSPLITTING: " << (splitting ? "ON" : "OFF") << endl; // TODO:
             cout << "MUlT DEPTH: " << multDepth << ", DEGREE " << degree << endl;
 
             cout << "\nExpected sigmoid:         " << funcResult << endl;
             cout << "\nExpected approx:          " << plainResult << endl;
             cout << "\nResult:                   " << cryptoResult << endl;
 
-            double mseSigmoid = mse(funcResult, cryptoResult);
-            double msePlain = mse(plainResult, cryptoResult);
+            double mseSigmoid = mape(funcResult, cryptoResult);
+            double msePlain = mape(plainResult, cryptoResult);
 
             cout << "\nAccuracy with mse (compared to sigmoid):                " << 100 - mseSigmoid << "%" << endl;
             cout << "\nAccuracy with mse (compared to plain evaluation):       " << 100 - msePlain << "%" << endl;
-            cout << "\n##################################################################\n" << endl;
         }
 
         void pregenerate(uint32_t degree) {
@@ -261,24 +294,26 @@ class SigmoidCKKS {
                 }
                 return x;
             }
-            else if (power % 2) { // odd
-                return cc->EvalMult(evalTreeSplitting((int) (power / 2), splitCoeff, true), evalTreeSplitting((int) (power / 2) + 1, splitCoeff, true));
+            else if(size) {
+                if (power % 2) { // odd
+                    return cc->EvalMult(evalTreeSplitting((int) (power / 2), splitCoeff, true), evalTreeSplitting((int) (power / 2) + 1, splitCoeff, true));
+                }
+                else { // even
+                    //cout  << "x^" << (int) (power / 2) << " * x^" << (int) (power / 2) + 1 << endl;
+                    return cc->EvalMult(evalTreeSplitting((int) (power / 2), splitCoeff, false), evalTreeSplitting((int) (power / 2), splitCoeff, false));
+                }
             }
-            else { // even
-                //cout  << "x^" << (int) (power / 2) << " * x^" << (int) (power / 2) + 1 << endl;
-                return cc->EvalMult(evalTreeSplitting((int) (power / 2), splitCoeff, false), evalTreeSplitting((int) (power / 2), splitCoeff, false));
-            }
+            else 
+                return xMap[power];
         }
 
         void evalSumSplitting() {
-            //pregenerate(degree);
+            pregenerate(degree);
 
-            //cout << "eval = c0 + evalTree(1, c1)" << endl;
             auto d = degree;
             auto splitCoeffs = getSplitCoeff(coeffs[1]);
             auto eval = cc->EvalAdd(coeffs[0], evalTreeSplitting(1, &splitCoeffs, true));
             while (d > 1) {
-                //cout << "eval = eval + evalTree(" << d << ", c" << d << ")" << endl;
                 if(d % 2) {
                     cout << "\nd: " << d << endl;
                     auto splitCoeffs = getSplitCoeff(coeffs[d]);
@@ -324,15 +359,17 @@ class SigmoidCKKS {
         auto eval() {
             clock_t start = clock();
             encrypt();
-            if(poly) {
+            if(poly == POLY_ON) {
                 cout << "EVAL POLY" << endl;
                 coeffs.resize(degree + 1);
                 ct = cc->EvalPoly(ct, coeffs);
             }
-            else if(splittingEnabled) {
+            else if(splitting == SPLIT_ON) {
+                cout << "EVAL SPLITTING" << endl;
                 evalSumSplitting();
             }
             else {
+                cout << "EVAL" << endl;
                 evalSum();
             }
             decrypt();
@@ -342,7 +379,8 @@ class SigmoidCKKS {
             printResults(sigmoidVec(), evalPlain(), cryptoResult);
 
             cout << "Time: " << ((double)(end - start)) / CLOCKS_PER_SEC << "s" << endl;
-
+            
+            cout << "\n##################################################################\n" << endl;
             return cryptoResult;
         }
 };
@@ -381,6 +419,16 @@ int main() {
     inputs.push_back({0.7965, 0.6646, 0.8311, 0.7833, 0.4030});
     inputs.push_back({0.1581, 0.7397, 0.6560, 0.2352, 0.0388});
     inputs.push_back({0.0761, 0.1767, 0.1927, 0.5325, 0.4199});
+    inputs.push_back({0.0005144, 0.0007881, 0.0001384, 0.0004364, 0.0001157});
+    inputs.push_back({0.0003786, 0.0007172, 0.0008601, 0.0003688, 0.0009518});
+    inputs.push_back({0.0004395, 0.0003447, 0.0004291, 0.0002271, 0.0006868});
+    inputs.push_back({0.0007191, 0.0009905, 0.0007610, 0.0007224, 0.0000447});
+    inputs.push_back({0.0003605, 0.0001613, 0.0008316, 0.0009419, 0.0002204});
+    inputs.push_back({0.0007054, 0.0000783, 0.0002983, 0.0000564, 0.0001315});
+    inputs.push_back({0.0004997, 0.0007808, 0.0000736, 0.0001635, 0.0009259});
+    inputs.push_back({0.0000312, 0.0005804, 0.0008637, 0.0008396, 0.0003025});
+    inputs.push_back({0.0004664, 0.0004262, 0.0008147, 0.0006184, 0.0002564});
+    inputs.push_back({0.0000490, 0.0006192, 0.0001629, 0.0006248, 0.0007947});
 
     //evaluateWithSplitting(0, 13, inputVector, coeff, pow(10,12), {(double)(1.0e-06), (double)(1.0e-06)});
 
@@ -392,11 +440,11 @@ int main() {
 
     vector<uint32_t> degrees = {13, 27};
     for(auto degree: degrees) {
-        SigmoidCKKS sigmoidCKKS(0, degree, inputs[0], coeffs, false, false);
+        SigmoidCKKS sigmoidCKKS(0, degree, inputs[10], coeffs, SPLIT_OFF, POLY_OFF);
         sigmoidCKKS.eval();
-        SigmoidCKKS sigmoidCKKSsplit(0, degree, inputs[0], coeffs, true, false);
+        SigmoidCKKS sigmoidCKKSsplit(0, degree, inputs[10], coeffs, SPLIT_ON, POLY_OFF);
         sigmoidCKKSsplit.eval();
-        SigmoidCKKS sigmoidCKKSpoly(0, degree, inputs[0], coeffs, false, true);
+        SigmoidCKKS sigmoidCKKSpoly(0, degree, inputs[10], coeffs, SPLIT_OFF, POLY_ON);
         sigmoidCKKSpoly.eval();
     }
 }
