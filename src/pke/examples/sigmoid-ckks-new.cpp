@@ -19,6 +19,8 @@
 using namespace lbcrypto;
 using namespace std;
 
+double splittingThresholds[] = {1.0e-80, 1.0e-40, 1.0e-20, 1.0e-10};
+
 class SigmoidCKKS {
     public:
         uint32_t scaleModSize, batchSize, multDepth, degree;
@@ -100,7 +102,7 @@ class SigmoidCKKS {
                     splitCoeff.push_back((double)(1.0e-05));
                 }
             }
-            else if (abs(c) < (double)(1.0e-16)) { 
+            else if (abs(c) < (double)(1.0e-10)) { 
                 cout << "abs(c) < (double)(1.0e-10) " << c << endl;
                 splitCoeff.push_back(c * (1.0e10));
                 for(int i = 0; i < 2; i++) {
@@ -166,23 +168,17 @@ class SigmoidCKKS {
 
         auto evalPlain() {
             vector<double> plainResult;
-            //cout << "##### eval plain #####" << endl;
             for(auto e : inputVector) {
                 double x = coeffs.at(0);
-                //cout << "input: " << e << endl;
-                //cout << "x = c[0] = " << coeff.at(0) << endl;
                 auto i = degree;
                 while (i > 0) {
                     if(i % 2) {
                         x += coeffs.at(i) * pow(e, i);
-                        //cout << "degree: " << i << endl;
-                        //cout << "x = c[" << i << "] = " << coeff.at(i) << " * " << e << "^" << i << endl;
                     }
                     i--;
                 }
                 plainResult.push_back(x);
             }
-            //cout << "######################" << endl;
             return plainResult;
         }
         
@@ -220,7 +216,6 @@ class SigmoidCKKS {
         } 
 
         void printResults(vector<double> funcResult, vector<double> plainResult, vector<complex<double>> cryptoResult) {
-            cout << "\n#######################################################################" << endl;
             cout << "INPUT: " << inputVector << endl;
             cout << "\nSPLITTING: " << (splittingEnabled ? "ON" : "OFF") << endl;
             cout << "MUlT DEPTH: " << multDepth << ", DEGREE " << degree << endl;
@@ -234,6 +229,7 @@ class SigmoidCKKS {
 
             cout << "\nAccuracy with mse (compared to sigmoid):                " << 100 - mseSigmoid << "%" << endl;
             cout << "\nAccuracy with mse (compared to plain evaluation):       " << 100 - msePlain << "%" << endl;
+            cout << "\n##################################################################\n" << endl;
         }
 
         void pregenerate(uint32_t degree) {
@@ -328,13 +324,13 @@ class SigmoidCKKS {
         auto eval() {
             clock_t start = clock();
             encrypt();
-            if(splittingEnabled) {
-                evalSumSplitting();
-            }
-            else if(poly) {
+            if(poly) {
                 cout << "EVAL POLY" << endl;
                 coeffs.resize(degree + 1);
                 ct = cc->EvalPoly(ct, coeffs);
+            }
+            else if(splittingEnabled) {
+                evalSumSplitting();
             }
             else {
                 evalSum();
@@ -400,5 +396,7 @@ int main() {
         sigmoidCKKS.eval();
         SigmoidCKKS sigmoidCKKSsplit(0, degree, inputs[0], coeffs, true, false);
         sigmoidCKKSsplit.eval();
+        SigmoidCKKS sigmoidCKKSpoly(0, degree, inputs[0], coeffs, false, true);
+        sigmoidCKKSpoly.eval();
     }
 }
